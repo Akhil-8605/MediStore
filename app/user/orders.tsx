@@ -43,7 +43,7 @@ export default function OrdersScreen() {
 
             // Add all items from order to cart
             for (const item of order.items) {
-                await addToCart(item, item.currentQuantity)
+                await addToCart(item, item.quantity)
             }
 
             Alert.alert("Success", "Items added to cart!", [
@@ -109,7 +109,7 @@ export default function OrdersScreen() {
                             <Text style={styles.itemsLabel}>Items ({item.items.length})</Text>
                             {item.items.slice(0, 2).map((product, index) => (
                                 <Text key={index} style={styles.itemName}>
-                                    • {product.name} x{product.currentQuantity}
+                                    • {product.name} x{product.quantity}
                                 </Text>
                             ))}
                             {item.items.length > 2 && <Text style={styles.moreItems}>+{item.items.length - 2} more items</Text>}

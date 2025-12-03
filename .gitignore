@@ -44,4 +44,4 @@ app-example
 
 # Firebase service account keys
 
-/config/firebase.ts
+/config

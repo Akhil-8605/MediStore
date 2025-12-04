@@ -19,7 +19,8 @@
         "monochromeImage": "./assets/images/favicon.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.akhil8605.MediStore"
     },
     "web": {
       "output": "static",
@@ -44,6 +45,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "5c43225a-a38c-4e75-9b46-ecd83aed0808"
+      }
     }
   }
 }

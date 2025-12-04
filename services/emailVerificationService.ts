@@ -1,5 +1,5 @@
 import { db } from "@/config/firebase"
-import { collection, addDoc, getDocs, query, where, deleteDoc } from "firebase/firestore"
+import { addDoc, collection, deleteDoc, getDocs, query, where } from "firebase/firestore"
 
 export interface VerificationCode {
     email: string
@@ -23,7 +23,7 @@ export const emailVerificationService = {
             expiresAt: now + VERIFICATION_EXPIRY,
         })
 
-        console.log("[v0] Verification code generated:", code, "for email:", email)
+        console.log("Verification code generated:", code, "for email:", email)
         return code
     },
 
@@ -39,7 +39,7 @@ export const emailVerificationService = {
             const querySnapshot = await getDocs(q)
 
             if (querySnapshot.empty) {
-                console.log("[v0] No verification code found")
+                console.log("No verification code found")
                 return false
             }
 
@@ -48,7 +48,7 @@ export const emailVerificationService = {
 
             // Check if code is expired
             if (Date.now() > data.expiresAt) {
-                console.log("[v0] Verification code expired")
+                console.log("Verification code expired")
                 await deleteDoc(doc.ref)
                 return false
             }

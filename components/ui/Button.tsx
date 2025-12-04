@@ -25,7 +25,7 @@ export const Button = ({
     if (disabled) return Colors.neutralGray;
     switch (variant) {
       case 'primary': return Colors.primary;
-      case 'secondary': return Colors.secondary;
+      case 'secondary': return Colors.logoback;
       case 'outline': return 'transparent';
       case 'ghost': return 'transparent';
       default: return Colors.primary;

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   View,
   Text,
@@ -27,11 +27,7 @@ export default function SearchScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const { addToCart } = useCart()
 
-  useEffect(() => {
-    loadMedicines()
-  }, [])
-
-  const loadMedicines = async () => {
+  const loadMedicines = useCallback(async () => {
     try {
       const meds = await firestoreService.getAllMedicines()
       setMedicines(meds)
@@ -41,7 +37,11 @@ export default function SearchScreen() {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    loadMedicines()
+  }, [loadMedicines])
 
   const onRefresh = () => {
     setRefreshing(true)
@@ -55,11 +55,16 @@ export default function SearchScreen() {
   )
 
   const handleAddToCart = async (medicine: Medicine) => {
+    if (!isInStock(medicine)) {
+      alert("This medicine is out of stock")
+      return
+    }
     await addToCart(medicine, 1)
   }
 
   const isInStock = (medicine: Medicine) => {
-    return medicine.currentQuantity ? medicine.currentQuantity > 0 : true
+    const quantity = medicine.totalQuantity || medicine.totalQuantity || 0
+    return quantity > 0
   }
 
   return (

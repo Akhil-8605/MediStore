@@ -3,8 +3,8 @@
 import { Colors } from "@/constants/Colors"
 import { router } from "expo-router"
 import { ArrowRight, Search } from "lucide-react-native"
-import { useState, useEffect } from "react"
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from "react-native"
+import { useState, useEffect, useCallback } from "react"
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useAuth } from "@/context/AuthContext"
 import { firestoreService, type Medicine } from "@/services/firestoreService"
@@ -15,20 +15,27 @@ export default function HomeScreen() {
   const { addToCart } = useCart()
   const [medicines, setMedicines] = useState<Medicine[]>([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => {
-    loadMedicines()
-  }, [])
-
-  const loadMedicines = async () => {
+  const loadMedicines = useCallback(async () => {
     try {
       const meds = await firestoreService.getAllMedicines()
-      setMedicines(meds.slice(0, 4)) // Show only 4 popular medicines
+      setMedicines(meds.slice(0, 4))
     } catch (error) {
       console.error("Error loading medicines:", error)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
+  }, [])
+
+  useEffect(() => {
+    loadMedicines()
+  }, [loadMedicines])
+
+  const onRefresh = () => {
+    setRefreshing(true)
+    loadMedicines()
   }
 
   const handleAddToCart = async (medicine: Medicine) => {
@@ -37,8 +44,10 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContent}>
-        {/* Header */}
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
         <View style={styles.header}>
           <View>
             <Text style={styles.greeting}>Hello, {userData?.name?.split(" ")[0]} 👋</Text>
@@ -53,13 +62,11 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Search Bar */}
         <TouchableOpacity style={styles.searchBar} onPress={() => router.push("/user/search")}>
           <Search size={20} color={Colors.textMuted} />
           <Text style={styles.placeholder}>Search for medicines...</Text>
         </TouchableOpacity>
 
-        {/* Hero Banner */}
         <View style={styles.hero}>
           <View style={styles.heroContent}>
             <Text style={styles.heroTitle}>Your Health,{"\n"}Delivered.</Text>
@@ -72,7 +79,6 @@ export default function HomeScreen() {
           <View style={styles.heroDecoration} />
         </View>
 
-        {/* Popular Medicines */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>Popular Medicines</Text>
           <TouchableOpacity onPress={() => router.push("/user/search")}>
@@ -141,7 +147,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: Colors.secondary,
+    backgroundColor: Colors.logoback,
     alignItems: "center",
     justifyContent: "center",
   },

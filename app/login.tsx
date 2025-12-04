@@ -2,12 +2,13 @@
 
 import { useAuth } from "@/context/AuthContext"
 import { useEffect, useState } from "react"
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native"
 import { Colors } from "@/constants/Colors"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { useRouter } from "expo-router"
 import { authService } from "@/services/authService"
+import Logo from "@/assets/images/favicon.png";
 
 export default function LoginScreen() {
   const [activeTab, setActiveTab] = useState<"user" | "admin">("user")
@@ -18,18 +19,14 @@ export default function LoginScreen() {
   const [showForgotPassword, setShowForgotPassword] = useState(false)
   const [resetEmail, setResetEmail] = useState("")
 
-  const { login, isAdmin, user } = useAuth()
+  const { login, user } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (user) {
-      if (isAdmin) {
-        router.replace("/admin/dashboard")
-      } else {
-        router.replace("/user/home")
-      }
+      router.replace("/user/home")
     }
-  }, [user, isAdmin])
+  }, [user])
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -41,10 +38,9 @@ export default function LoginScreen() {
       setLoading(true)
       setError("")
 
-      if (activeTab === "admin") {
-        if (email == "admin@gmail.com" || password == "admin@12345") {
-          router.replace("/admin/dashboard")
-        }
+      if (email == "admin@gmail.com" || password == "admin@12345") {
+        router.replace("/admin/dashboard")
+        return
       }
 
       await login(email, password)
@@ -114,26 +110,11 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          <View style={styles.logoContainer}>
-            <Text style={{ fontSize: 32 }}>💊</Text>
-          </View>
+          {/* <View style={styles.logoContainer}>
+            <Text style={styles.iconContainer}><Image source={Logo} /></Text>
+          </View> */}
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your MediStore account</Text>
-        </View>
-
-        <View style={styles.tabsContainer}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "user" && styles.activeTab]}
-            onPress={() => setActiveTab("user")}
-          >
-            <Text style={[styles.tabText, activeTab === "user" && styles.activeTabText]}>Patient</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === "admin" && styles.activeTab]}
-            onPress={() => setActiveTab("admin")}
-          >
-            <Text style={[styles.tabText, activeTab === "admin" && styles.activeTabText]}>Medical Owner</Text>
-          </TouchableOpacity>
         </View>
 
         <View style={styles.form}>
@@ -210,6 +191,15 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: Colors.secondary,
     marginTop: 4,
+  },
+  iconContainer: {
+    width: 150,
+    height: 150,
+    backgroundColor: Colors.logoback,
+    borderRadius: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 32,
   },
   tabsContainer: {
     flexDirection: "row",

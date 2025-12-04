@@ -1,5 +1,5 @@
 import { auth } from "@/config/firebase"
-import { updatePassword, reauthenticateWithCredential, EmailAuthProvider, sendPasswordResetEmail } from "firebase/auth"
+import { EmailAuthProvider, reauthenticateWithCredential, sendPasswordResetEmail, updatePassword } from "firebase/auth"
 
 export const passwordService = {
     // Change password
@@ -18,7 +18,7 @@ export const passwordService = {
             // Update password
             await updatePassword(user, newPassword)
 
-            console.log("[v0] Password changed successfully")
+            console.log("Password changed successfully")
             return true
         } catch (error: any) {
             console.error("Error changing password:", error)
@@ -30,7 +30,7 @@ export const passwordService = {
     async sendPasswordReset(email: string): Promise<boolean> {
         try {
             await sendPasswordResetEmail(auth, email)
-            console.log("[v0] Password reset email sent")
+            console.log("Password reset email sent")
             return true
         } catch (error: any) {
             console.error("Error sending password reset:", error)

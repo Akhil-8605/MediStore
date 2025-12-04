@@ -1,16 +1,16 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useState, type ReactNode, useEffect } from "react"
 import { cartService, type CartItem } from "@/services/cartService"
+import type React from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 
 interface CartContextType {
     items: CartItem[]
     total: number
     loading: boolean
-    addToCart: (medicine: any, currentQuantity: number) => Promise<void>
+    addToCart: (medicine: any, totalQuantity: number) => Promise<void>
     removeFromCart: (medicineId: string) => Promise<void>
-    updateQuantity: (medicineId: string, currentQuantity: number) => Promise<void>
+    updateQuantity: (medicineId: string, totalQuantity: number) => Promise<void>
     clearCart: () => Promise<void>
     refreshCart: () => Promise<void>
 }
@@ -35,8 +35,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         refreshCart()
     }, [])
 
-    const addToCart = async (medicine: any, currentQuantity: number) => {
-        await cartService.addToCart(medicine, currentQuantity)
+    const addToCart = async (medicine: any, totalQuantity: number) => {
+        await cartService.addToCart(medicine, totalQuantity)
         await refreshCart()
     }
 
@@ -45,8 +45,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         await refreshCart()
     }
 
-    const updateQuantity = async (medicineId: string, currentQuantity: number) => {
-        await cartService.updateQuantity(medicineId, currentQuantity)
+    const updateQuantity = async (medicineId: string, totalQuantity: number) => {
+        await cartService.updateQuantity(medicineId, totalQuantity)
         await refreshCart()
     }
 

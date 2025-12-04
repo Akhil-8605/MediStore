@@ -1,26 +1,68 @@
 "use client"
 
-import { useState } from "react"
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
+import { Button } from "@/components/ui/Button"
+import { db } from "@/config/firebase"
 import { Colors } from "@/constants/Colors"
 import { useAuth } from "@/context/AuthContext"
 import { useCart } from "@/context/CartContext"
 import type { Order } from "@/services/firestoreService"
-import { Button } from "@/components/ui/Button"
-import { MapPin } from "lucide-react-native"
 import { router } from "expo-router"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { MapPin } from "lucide-react-native"
+import { useCallback, useEffect, useState } from "react"
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
 
 export default function OrdersScreen() {
-    const { userData } = useAuth()
+    const { userData, user } = useAuth()
     const { addToCart } = useCart()
     const [loading, setLoading] = useState(false)
+    const [refreshing, setRefreshing] = useState(false)
+    const [orders, setOrders] = useState<Order[]>([])
 
-    const orders: Order[] = userData?.orders || []
+    const fetchOrders = useCallback(async () => {
+        if (!user?.uid) return
+        try {
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (userDoc.exists()) {
+                const fetchedOrders = userDoc.data().orders || []
+                const sortedOrders = [...fetchedOrders].sort((a, b) => {
+                    const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt)
+                    const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt)
+                    return dateB.getTime() - dateA.getTime()
+                })
+                setOrders(sortedOrders)
+            }
+        } catch (error) {
+            console.error("Error fetching orders:", error)
+        }
+    }, [user?.uid])
+
+    useEffect(() => {
+        fetchOrders()
+    }, [fetchOrders])
+
+    useEffect(() => {
+        if (userData?.orders) {
+            const sortedOrders = [...userData.orders].sort((a, b) => {
+                const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt)
+                const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt)
+                return dateB.getTime() - dateA.getTime()
+            })
+            setOrders(sortedOrders)
+        }
+    }, [userData?.orders])
+
+    const onRefresh = async () => {
+        setRefreshing(true)
+        await fetchOrders()
+        setRefreshing(false)
+    }
 
     const getStatusColor = (status: string) => {
         switch (status) {
             case "completed":
+            case "delivered":
                 return "#10B981"
             case "pending":
                 return "#F59E0B"
@@ -32,21 +74,68 @@ export default function OrdersScreen() {
     }
 
     const getStatusIcon = (status: string) => {
-        if (status === "completed") return "✓"
+        if (status === "completed" || status === "delivered") return "✓"
         if (status === "pending") return "⏱"
         return "✕"
+    }
+
+    const formatDateTime = (dateValue: any) => {
+        try {
+            let date: Date
+            if (dateValue?.toDate) {
+                date = dateValue.toDate()
+            } else if (typeof dateValue === "string") {
+                date = new Date(dateValue)
+            } else {
+                return "N/A"
+            }
+            return date.toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+            })
+        } catch {
+            return "N/A"
+        }
     }
 
     const handleReorder = async (order: Order) => {
         try {
             setLoading(true)
 
-            // Add all items from order to cart
-            for (const item of order.items) {
-                await addToCart(item, item.quantity)
+            if (!user?.uid) {
+                Alert.alert("Error", "User not authenticated")
+                return
             }
 
-            Alert.alert("Success", "Items added to cart!", [
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (!userDoc.exists()) {
+                Alert.alert("Error", "User not found")
+                return
+            }
+
+            const currentUserData = userDoc.data()
+
+            const reorder = {
+                ...order,
+                reorderId: `REORDER-${Date.now()}`,
+                originalOrderId: order.orderId,
+                status: "pending",
+                createdAt: new Date().toISOString(),
+            }
+
+            const userRef = doc(db, "AllUsers", user.uid)
+            await updateDoc(userRef, {
+                reorders: [...(currentUserData?.reorders || []), reorder],
+            })
+
+            for (const item of order.items) {
+                await addToCart(item, item.quantity || item.totalQuantity || 1)
+            }
+
+            Alert.alert("Success", "Reorder created! Items added to cart", [
                 {
                     text: "View Cart",
                     onPress: () => router.push("/user/cart"),
@@ -56,8 +145,9 @@ export default function OrdersScreen() {
                     onPress: () => router.back(),
                 },
             ])
-        } catch (error) {
-            Alert.alert("Error", "Failed to reorder items")
+        } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to reorder items")
+            console.error("Reorder error:", error)
         } finally {
             setLoading(false)
         }
@@ -87,15 +177,15 @@ export default function OrdersScreen() {
 
             <FlatList
                 data={orders}
-                keyExtractor={(item) => item.orderId}
+                keyExtractor={(item, index) => item.orderId || `order-${index}`}
                 contentContainerStyle={styles.list}
+                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
                 renderItem={({ item }) => (
                     <View style={styles.orderCard}>
-                        {/* Header */}
                         <View style={styles.cardHeader}>
                             <View style={styles.orderId}>
                                 <Text style={styles.orderIdText}>{item.orderId}</Text>
-                                <Text style={styles.orderDate}>{new Date(item.createdAt).toLocaleDateString()}</Text>
+                                <Text style={styles.orderDate}>{formatDateTime(item.createdAt)}</Text>
                             </View>
                             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(item.status) + "20" }]}>
                                 <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
@@ -104,18 +194,16 @@ export default function OrdersScreen() {
                             </View>
                         </View>
 
-                        {/* Items */}
                         <View style={styles.itemsContainer}>
                             <Text style={styles.itemsLabel}>Items ({item.items.length})</Text>
                             {item.items.slice(0, 2).map((product, index) => (
                                 <Text key={index} style={styles.itemName}>
-                                    • {product.name} x{product.quantity}
+                                    • {product.name} x{product.quantity || product.totalQuantity || 1}
                                 </Text>
                             ))}
                             {item.items.length > 2 && <Text style={styles.moreItems}>+{item.items.length - 2} more items</Text>}
                         </View>
 
-                        {/* Details */}
                         <View style={styles.details}>
                             <View style={styles.detailRow}>
                                 <Text style={styles.detailLabel}>Amount</Text>
@@ -127,7 +215,6 @@ export default function OrdersScreen() {
                             </View>
                         </View>
 
-                        {/* Address */}
                         <View style={styles.addressSection}>
                             <MapPin size={14} color={Colors.textMuted} />
                             <Text style={styles.addressText} numberOfLines={2}>
@@ -135,7 +222,6 @@ export default function OrdersScreen() {
                             </Text>
                         </View>
 
-                        {/* Actions */}
                         <View style={styles.actions}>
                             <TouchableOpacity
                                 style={styles.viewButton}
@@ -154,7 +240,7 @@ export default function OrdersScreen() {
                                     onPress={() => handleReorder(item)}
                                     disabled={loading}
                                 >
-                                    <Text style={styles.reorderButtonText}>Reorder</Text>
+                                    <Text style={styles.reorderButtonText}>{loading ? "Processing..." : "Reorder"}</Text>
                                 </TouchableOpacity>
                             )}
                         </View>

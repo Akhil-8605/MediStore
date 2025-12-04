@@ -8,16 +8,16 @@ export interface Medicine {
     category: string
     description: string
     stock: boolean
-    currentQuantity?: number
+    totalQuantity?: number
     lowStockAlert?: number
 }
 
 export interface Order {
     orderId: string
-    items: (Medicine & { currentQuantity: number })[]
+    items: (Medicine & { quantity: number; totalQuantity?: number })[]
     total: number
     paymentMethod: "COD" | "UPI"
-    status: "pending" | "completed" | "cancelled"
+    status: "pending" | "completed" | "cancelled" | "delivered"
     createdAt: string
     deliveryAddress: string
     receipt?: string
@@ -27,19 +27,28 @@ export const firestoreService = {
     // Get all medicines
     async getAllMedicines(): Promise<Medicine[]> {
         const querySnapshot = await getDocs(collection(db, "AllMedicines"))
-        return querySnapshot.docs.map(
-            (doc) =>
-                ({
-                    id: doc.id,
-                    ...doc.data(),
-                }) as Medicine,
-        )
+        return querySnapshot.docs.map((doc) => {
+            const data = doc.data()
+            return {
+                id: doc.id,
+                ...data,
+                totalQuantity: data.totalQuantity || data.totalQuantity || 0,
+            } as Medicine
+        })
     },
 
     // Get medicine by ID
     async getMedicineById(id: string): Promise<Medicine | null> {
         const docSnap = await getDoc(doc(db, "AllMedicines", id))
-        return docSnap.exists() ? ({ id: docSnap.id, ...docSnap.data() } as Medicine) : null
+        if (docSnap.exists()) {
+            const data = docSnap.data()
+            return {
+                id: docSnap.id,
+                ...data,
+                totalQuantity: data.totalQuantity || data.totalQuantity || 0,
+            } as Medicine
+        }
+        return null
     },
 
     // Add order to user
@@ -59,6 +68,9 @@ export const firestoreService = {
             message: string
             timestamp: string
             read: boolean
+            type?: string
+            orderId?: string
+            hasReorderButton?: boolean
         },
     ) {
         const userRef = doc(db, "AllUsers", userId)
@@ -71,5 +83,33 @@ export const firestoreService = {
     async updateUserData(userId: string, data: Partial<any>) {
         const userRef = doc(db, "AllUsers", userId)
         await updateDoc(userRef, data)
+    },
+
+    async addReminder(
+        userId: string,
+        reminder: {
+            medicineIds: string[]
+            reminderDays: number
+            createdAt: string
+            dueAt: string
+            notified: boolean
+        },
+    ) {
+        const userRef = doc(db, "AllUsers", userId)
+        await updateDoc(userRef, {
+            reminders: arrayUnion(reminder),
+        })
+    },
+
+    async markReminderAsNotified(userId: string, reminderDueAt: string) {
+        const userSnap = await getDoc(doc(db, "AllUsers", userId))
+        if (userSnap.exists()) {
+            const userData = userSnap.data()
+            const updatedReminders =
+                userData.reminders?.map((r: any) => (r.dueAt === reminderDueAt ? { ...r, notified: true } : r)) || []
+            await updateDoc(doc(db, "AllUsers", userId), {
+                reminders: updatedReminders,
+            })
+        }
     },
 }

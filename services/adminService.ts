@@ -8,11 +8,25 @@ export interface Medicine {
     type: string
     price: number
     totalQuantity: number
-    currentQuantity: number
     lowStockAlert: number
     expiryDate: string
     createdAt?: Timestamp
     updatedAt?: Timestamp
+}
+
+export interface DeliveredOrder {
+    id?: string
+    orderId: string
+    userId: string
+    userName: string
+    userEmail: string
+    userPhone: string
+    items: any[]
+    totalAmount: number
+    deliveryAddress: string
+    paymentMethod: string
+    deliveredAt: Timestamp
+    createdAt: string
 }
 
 export interface DashboardStats {
@@ -40,23 +54,36 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
 
         // Get all orders and calculate revenue
         let totalOrders = 0
-        let totalRevenue = 0
+        let activeUsers = 0
+
         usersSnapshot.forEach((userDoc) => {
             const userData = userDoc.data()
             const orders = userData.orders || []
+
+            if (orders.length > 0) {
+                activeUsers++
+            }
+
             totalOrders += orders.length
-            orders.forEach((order: any) => {
-                totalRevenue += order.totalAmount || 0
-            })
         })
 
-        // Get medicines stats
+        const deliveredOrdersSnapshot = await getDocs(collection(db, "DeliveredOrders"))
+        let totalRevenue = 0
+        deliveredOrdersSnapshot.forEach((doc) => {
+            const order = doc.data()
+            totalRevenue += order.totalAmount || 0
+        })
+
         const medicinesSnapshot = await getDocs(collection(db, "AllMedicines"))
-        const totalMedicines = medicinesSnapshot.size
+        let totalMedicines = 0
         let lowStockCount = 0
+
         medicinesSnapshot.forEach((medDoc) => {
             const medicine = medDoc.data() as Medicine
-            if (medicine.currentQuantity < medicine.lowStockAlert) {
+            if (medicine.totalQuantity > 0) {
+                totalMedicines++
+            }
+            if (medicine.totalQuantity < medicine.lowStockAlert) {
                 lowStockCount++
             }
         })
@@ -64,28 +91,27 @@ export const getDashboardStats = async (): Promise<DashboardStats> => {
         return {
             totalRevenue,
             totalOrders,
-            totalUsers,
+            totalUsers: activeUsers,
             totalMedicines,
             lowStockCount,
         }
     } catch (error) {
-        console.error(" Error fetching dashboard stats:", error)
+        console.error("Error fetching dashboard stats:", error)
         throw error
     }
 }
 
-// Get low stock medicines
 export const getLowStockMedicines = async (): Promise<Medicine[]> => {
     try {
         const medicinesSnapshot = await getDocs(collection(db, "AllMedicines"))
         const lowStockMedicines: Medicine[] = []
         medicinesSnapshot.forEach((doc) => {
             const medicine = { id: doc.id, ...doc.data() } as Medicine
-            if (medicine.currentQuantity < medicine.lowStockAlert) {
+            if (medicine.totalQuantity < medicine.lowStockAlert) {
                 lowStockMedicines.push(medicine)
             }
         })
-        return lowStockMedicines.sort((a, b) => a.currentQuantity - b.currentQuantity)
+        return lowStockMedicines.sort((a, b) => a.totalQuantity - b.totalQuantity)
     } catch (error) {
         console.error(" Error fetching low stock medicines:", error)
         throw error
@@ -133,7 +159,6 @@ export const addMedicine = async (medicine: Medicine): Promise<string> => {
     try {
         const docRef = await addDoc(collection(db, "AllMedicines"), {
             ...medicine,
-            currentQuantity: medicine.totalQuantity,
             createdAt: Timestamp.now(),
             updatedAt: Timestamp.now(),
         })
@@ -198,20 +223,50 @@ export const getMedicineById = async (id: string): Promise<Medicine | null> => {
     }
 }
 
-// Update medicine stock after order
 export const updateMedicineStock = async (medicineId: string, quantity: number): Promise<void> => {
     try {
         const docRef = doc(db, "AllMedicines", medicineId)
         const currentDoc = await getDoc(docRef)
         if (currentDoc.exists()) {
-            const currentQuantity = (currentDoc.data() as Medicine).currentQuantity || 0
+            const totalQuantity = (currentDoc.data() as Medicine).totalQuantity || 0
             await updateDoc(docRef, {
-                currentQuantity: Math.max(0, currentQuantity - quantity),
+                totalQuantity: Math.max(0, totalQuantity - quantity),
                 updatedAt: Timestamp.now(),
             })
         }
     } catch (error) {
         console.error(" Error updating medicine stock:", error)
+        throw error
+    }
+}
+
+export const addDeliveredOrder = async (orderData: Omit<DeliveredOrder, "id" | "deliveredAt">): Promise<string> => {
+    try {
+        const docRef = await addDoc(collection(db, "DeliveredOrders"), {
+            ...orderData,
+            deliveredAt: Timestamp.now(),
+        })
+        return docRef.id
+    } catch (error) {
+        console.error("Error adding delivered order:", error)
+        throw error
+    }
+}
+
+export const getAllDeliveredOrders = async (): Promise<DeliveredOrder[]> => {
+    try {
+        const snapshot = await getDocs(collection(db, "DeliveredOrders"))
+        const orders: DeliveredOrder[] = []
+        snapshot.forEach((doc) => {
+            orders.push({ id: doc.id, ...doc.data() } as DeliveredOrder)
+        })
+        return orders.sort((a, b) => {
+            const dateA = a.deliveredAt?.toDate?.() || new Date(a.createdAt)
+            const dateB = b.deliveredAt?.toDate?.() || new Date(b.createdAt)
+            return dateB.getTime() - dateA.getTime()
+        })
+    } catch (error) {
+        console.error("Error fetching delivered orders:", error)
         throw error
     }
 }
@@ -289,7 +344,7 @@ export const searchMedicinesAdvanced = async (
                     (medicine.name.toLowerCase().includes(term) ||
                         medicine.description?.toLowerCase().includes(term) ||
                         medicine.price.toString().includes(term) ||
-                        medicine.currentQuantity.toString().includes(term))
+                        medicine.totalQuantity.toString().includes(term))
             }
 
             if (filterType) {
@@ -297,7 +352,7 @@ export const searchMedicinesAdvanced = async (
             }
 
             if (filterLowStock) {
-                matches = matches && medicine.currentQuantity <= medicine.lowStockAlert
+                matches = matches && medicine.totalQuantity <= medicine.lowStockAlert
             }
 
             if (priceRange) {

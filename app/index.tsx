@@ -2,8 +2,9 @@ import { Button } from '@/components/ui/Button';
 import { Colors } from '@/constants/Colors';
 import { router } from 'expo-router';
 import React from 'react';
-import { Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Logo from "@/assets/images/favicon.png";
 
 const { width } = Dimensions.get('window');
 
@@ -12,33 +13,21 @@ export default function SplashScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.iconContainer}>
-          <Text style={styles.iconText}>💊</Text>
+          <Text style={styles.iconText}><Image source={Logo} /></Text>
         </View>
-        
+
         <Text style={styles.title}>Welcome to MediStore</Text>
         <Text style={styles.subtitle}>
           Your personal healthcare companion for managing medicines and prescriptions.
         </Text>
-        
-        <View style={styles.dotsContainer}>
-          <View style={[styles.dot, styles.activeDot]} />
-          <View style={styles.dot} />
-          <View style={styles.dot} />
-        </View>
-      </View>
 
-      <View style={styles.footer}>
-        <Button 
-          title="Get Started" 
-          onPress={() => router.push('/login')}
-          size="lg"
-        />
-        <Button 
-          title="Skip" 
-          variant="ghost" 
-          onPress={() => router.push('/login')}
-          style={styles.skipButton}
-        />
+        <View style={styles.footer}>
+          <Button
+            title="Get Started"
+            onPress={() => router.push('/login')}
+            size="lg"
+          />
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -56,16 +45,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   iconContainer: {
-    width: 100,
-    height: 100,
-    backgroundColor: Colors.secondary,
+    width: 150,
+    height: 150,
+    backgroundColor: Colors.logoback,
     borderRadius: 50,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 32,
   },
   iconText: {
-    fontSize: 48,
+    fontSize: 60,
   },
   title: {
     fontSize: 28,
@@ -98,6 +87,7 @@ const styles = StyleSheet.create({
   footer: {
     padding: 24,
     gap: 12,
+    width: '100%',
   },
   skipButton: {
     marginTop: 8,

@@ -3,219 +3,295 @@
 import { db } from "@/config/firebase"
 import { Colors } from "@/constants/Colors"
 import { useAuth } from "@/context/AuthContext"
+import { useCart } from "@/context/CartContext"
+import { router } from "expo-router"
 import { arrayRemove, doc, getDoc, updateDoc } from "firebase/firestore"
-import { Bell, Trash2, X } from "lucide-react-native"
-import { useEffect, useState } from "react"
-import {
-    ActivityIndicator,
-    Alert,
-    RefreshControl,
-    SectionList,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from "react-native"
+import { AlertCircle, Bell, CheckCircle, ChevronRight, Clock, Package, ShoppingCart, Trash2 } from "lucide-react-native"
+import { useCallback, useEffect, useState } from "react"
+import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 
 interface Notification {
     id: string
     title: string
     message: string
-    createdAt: any
+    timestamp: string
     read: boolean
+    type?: string
+    orderId?: string
+    hasReorderButton?: boolean
+    items?: any[]
 }
 
 export default function NotificationsScreen() {
-    const { userData, user } = useAuth()
+    const { user } = useAuth()
+    const { addToCart } = useCart()
     const [notifications, setNotifications] = useState<Notification[]>([])
-    const [loading, setLoading] = useState(true)
-    const [refreshing, setRefreshing] = useState(false)
+    const [loading, setLoading] = useState(false)
 
-    const fetchNotifications = async () => {
+    const formatDate = (dateString: string) => {
         try {
-            if (!user?.uid) return
+            let date: Date
 
-            const userRef = doc(db, "AllUsers", user.uid)
-            const userSnap = await getDoc(userRef)
-
-            if (userSnap.exists()) {
-                const notifs = userSnap.data().notifications || []
-                const sorted = notifs.sort((a: any, b: any) => {
-                    const dateA = a.createdAt?.toDate?.() || new Date(a.createdAt)
-                    const dateB = b.createdAt?.toDate?.() || new Date(b.createdAt)
-                    return dateB - dateA
-                })
-                setNotifications(sorted)
+            if (typeof dateString === "string") {
+                date = new Date(dateString)
+            } else if (dateString && typeof dateString === "object" && "toDate" in dateString) {
+                date = (dateString as any).toDate()
+            } else {
+                return "Date unavailable"
             }
+
+            if (isNaN(date.getTime())) {
+                return "Date unavailable"
+            }
+
+            const now = new Date()
+            const diffMs = now.getTime() - date.getTime()
+            const diffMins = Math.floor(diffMs / 60000)
+            const diffHours = Math.floor(diffMs / 3600000)
+            const diffDays = Math.floor(diffMs / 86400000)
+
+            if (diffMins < 1) return "Just now"
+            if (diffMins < 60) return `${diffMins}m ago`
+            if (diffHours < 24) return `${diffHours}h ago`
+            if (diffDays < 7) return `${diffDays}d ago`
+
+            return date.toLocaleDateString("en-IN", {
+                day: "numeric",
+                month: "short",
+                year: "numeric",
+            })
         } catch (error) {
-            console.error(" Error fetching notifications:", error)
-        } finally {
-            setLoading(false)
-            setRefreshing(false)
+            console.error("[v0] Date formatting error:", error)
+            return "Invalid date"
         }
     }
+
+    const fetchNotifications = useCallback(async () => {
+        if (!user) return
+
+        setLoading(true)
+        try {
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (userDoc.exists()) {
+                const notifications = userDoc.data().notifications || []
+                setNotifications(
+                    notifications.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+                )
+            }
+        } catch (error) {
+            console.error("Error fetching notifications:", error)
+            Alert.alert("Error", "Failed to load notifications")
+        } finally {
+            setLoading(false)
+        }
+    }, [user])
 
     useEffect(() => {
         fetchNotifications()
-    }, [user?.uid])
+    }, [fetchNotifications])
 
-    const handleRefresh = () => {
-        setRefreshing(true)
-        fetchNotifications()
-    }
+    const handleReorderNow = async (notification: Notification) => {
+        if (!user || !notification.orderId) return
 
-    const handleDeleteNotification = async (notifId: string, notifData: Notification) => {
         try {
-            if (!user?.uid) return
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (userDoc.exists()) {
+                const originalOrder = userDoc.data().orders?.find((o: any) => o.orderId === notification.orderId)
 
-            const userRef = doc(db, "AllUsers", user.uid)
-            await updateDoc(userRef, {
-                notifications: arrayRemove({
-                    id: notifData.id,
-                    title: notifData.title,
-                    message: notifData.message,
-                    createdAt: notifData.createdAt,
-                    read: notifData.read,
-                }),
-            })
+                if (originalOrder && originalOrder.items) {
+                    for (const item of originalOrder.items) {
+                        await addToCart(item, item.quantity || item.totalQuantity || 1)
+                    }
 
-            // Update local state
-            setNotifications(notifications.filter((n) => n.id !== notifId))
-            Alert.alert("Success", "Notification deleted")
+                    await updateDoc(doc(db, "AllUsers", user.uid), {
+                        notifications: arrayRemove(notification),
+                    })
+
+                    Alert.alert("Success", "Items added to cart!", [
+                        {
+                            text: "Go to Cart",
+                            onPress: () => router.push("/user/cart"),
+                        },
+                        {
+                            text: "Continue Shopping",
+                            onPress: () => { },
+                        },
+                    ])
+
+                    fetchNotifications()
+                }
+            }
         } catch (error) {
-            console.error(" Error deleting notification:", error)
-            Alert.alert("Error", "Failed to delete notification")
+            console.error("Error processing reorder:", error)
+            Alert.alert("Error", "Failed to add items to cart")
         }
     }
 
-    const handleClearAll = () => {
-        Alert.alert("Clear All Notifications", "Are you sure you want to delete all notifications?", [
-            { text: "Cancel", style: "cancel" },
-            {
-                text: "Delete All",
-                style: "destructive",
-                onPress: async () => {
-                    try {
-                        if (!user?.uid) return
+    const handleDeleteNotification = async (notification: Notification) => {
+        if (!user) return
 
-                        const userRef = doc(db, "AllUsers", user.uid)
-                        await updateDoc(userRef, {
-                            notifications: [],
-                        })
-
-                        setNotifications([])
-                        Alert.alert("Success", "All notifications cleared")
-                    } catch (error) {
-                        console.error(" Error clearing notifications:", error)
-                        Alert.alert("Error", "Failed to clear notifications")
-                    }
-                },
-            },
-        ])
+        try {
+            await updateDoc(doc(db, "AllUsers", user.uid), {
+                notifications: arrayRemove(notification),
+            })
+            fetchNotifications()
+        } catch (error) {
+            console.error("Error deleting notification:", error)
+        }
     }
 
-    // Group notifications by read status
-    const unread = notifications.filter((n) => !n.read)
-    const read = notifications.filter((n) => n.read)
+    const handleMarkAsRead = async (notification: Notification) => {
+        if (!user || notification.read) return
 
-    const sections = [
-        ...(unread.length > 0 ? [{ title: "New", data: unread }] : []),
-        ...(read.length > 0 ? [{ title: "Earlier", data: read }] : []),
-    ]
-
-    const getNotificationIcon = (title: string) => {
-        if (title.includes("Order")) return "📦"
-        if (title.includes("Delivery")) return "🚚"
-        if (title.includes("Payment")) return "💳"
-        if (title.includes("Reminder")) return "⏰"
-        if (title.includes("Reorder")) return "🔄"
-        return "📢"
+        try {
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (userDoc.exists()) {
+                const currentNotifications = userDoc.data().notifications || []
+                const updatedNotifications = currentNotifications.map((n: Notification) =>
+                    n.id === notification.id ? { ...n, read: true } : n,
+                )
+                await updateDoc(doc(db, "AllUsers", user.uid), {
+                    notifications: updatedNotifications,
+                })
+                fetchNotifications()
+            }
+        } catch (error) {
+            console.error("Error marking as read:", error)
+        }
     }
 
-    if (loading) {
+    const getNotificationIcon = (type?: string) => {
+        switch (type) {
+            case "order_status":
+                return Package
+            case "reminder":
+                return Clock
+            case "success":
+                return CheckCircle
+            case "alert":
+                return AlertCircle
+            default:
+                return Bell
+        }
+    }
+
+    const getIconBgColor = (type?: string, read?: boolean) => {
+        if (read) return "#F3F4F6"
+        switch (type) {
+            case "order_status":
+                return "#DBEAFE"
+            case "reminder":
+                return "#FEF3C7"
+            case "success":
+                return "#DCFCE7"
+            case "alert":
+                return "#FEE2E2"
+            default:
+                return "#EDE9FE"
+        }
+    }
+
+    const getIconColor = (type?: string, read?: boolean) => {
+        if (read) return Colors.textMuted
+        switch (type) {
+            case "order_status":
+                return "#2563EB"
+            case "reminder":
+                return "#D97706"
+            case "success":
+                return "#059669"
+            case "alert":
+                return "#DC2626"
+            default:
+                return "#7C3AED"
+        }
+    }
+
+    const renderNotificationCard = ({ item }: { item: Notification }) => {
+        const IconComponent = getNotificationIcon(item.type)
+        const iconBgColor = getIconBgColor(item.type, item.read)
+        const iconColor = getIconColor(item.type, item.read)
+
         return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Notifications</Text>
+            <TouchableOpacity
+                style={[styles.card, !item.read && styles.unreadCard]}
+                onPress={() => handleMarkAsRead(item)}
+                activeOpacity={0.7}
+            >
+                {/* Header Row */}
+                <View style={styles.cardHeader}>
+                    <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
+                        <IconComponent size={20} color={iconColor} />
+                    </View>
+                    <View style={styles.headerContent}>
+                        <View style={styles.titleRow}>
+                            <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>{item.title}</Text>
+                            {!item.read && <View style={styles.unreadDot} />}
+                        </View>
+                        <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+                    </View>
                 </View>
-                <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="large" color={Colors.primary} />
-                </View>
-            </SafeAreaView>
-        )
-    }
 
-    if (notifications.length === 0) {
-        return (
-            <SafeAreaView style={styles.container}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Notifications</Text>
+                {/* Message */}
+                <View style={styles.messageContainer}>
+                    <Text style={styles.message}>{item.message}</Text>
                 </View>
-                <View style={styles.emptyContainer}>
-                    <Bell size={48} color={Colors.textMuted} />
-                    <Text style={styles.emptyTitle}>No Notifications</Text>
-                    <Text style={styles.emptyText}>You're all caught up! New updates will appear here</Text>
+
+                {/* Order ID if present */}
+                {item.orderId && (
+                    <View style={styles.orderIdContainer}>
+                        <Package size={14} color={Colors.primary} />
+                        <Text style={styles.orderIdText}>Order #{item.orderId.substring(0, 12)}</Text>
+                    </View>
+                )}
+
+                {/* Actions */}
+                <View style={styles.actionsContainer}>
+                    {item.hasReorderButton && (
+                        <TouchableOpacity style={styles.reorderButton} onPress={() => handleReorderNow(item)}>
+                            <ShoppingCart size={16} color={Colors.white} />
+                            <Text style={styles.reorderButtonText}>Reorder Now</Text>
+                            <ChevronRight size={16} color={Colors.white} />
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity
+                        style={[styles.deleteButton, item.hasReorderButton && styles.deleteButtonSmall]}
+                        onPress={() => handleDeleteNotification(item)}
+                    >
+                        <Trash2 size={18} color={Colors.error} />
+                        {!item.hasReorderButton && <Text style={styles.deleteButtonText}>Delete</Text>}
+                    </TouchableOpacity>
                 </View>
-            </SafeAreaView>
+            </TouchableOpacity>
         )
     }
 
     return (
         <SafeAreaView style={styles.container}>
-            <View style={styles.headerSection}>
-                <View style={styles.header}>
-                    <Text style={styles.title}>Notifications</Text>
-                    {notifications.length > 0 && (
-                        <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
-                            <X size={20} color={Colors.error} />
-                        </TouchableOpacity>
-                    )}
+            <View style={styles.header}>
+                <View>
+                    <Text style={styles.headerTitle}>Notifications</Text>
+                    <Text style={styles.headerSubtitle}>{notifications.filter((n) => !n.read).length} unread notifications</Text>
                 </View>
-                {unread.length > 0 && (
-                    <View style={styles.unreadBadgeContainer}>
-                        <View style={styles.unreadBadge}>
-                            <Text style={styles.unreadBadgeText}>{unread.length}</Text>
-                        </View>
-                        <Text style={styles.unreadText}>
-                            {unread.length} unread notification{unread.length !== 1 ? "s" : ""}
-                        </Text>
-                    </View>
-                )}
             </View>
 
-            <SectionList
-                sections={sections}
+            <FlatList
+                data={notifications}
                 keyExtractor={(item) => item.id}
+                renderItem={renderNotificationCard}
                 contentContainerStyle={styles.list}
-                refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
-                renderSectionHeader={({ section: { title } }) => <Text style={styles.sectionHeader}>{title}</Text>}
-                renderItem={({ item }) => (
-                    <View style={[styles.notificationCard, !item.read && styles.unreadCard]}>
-                        <View style={styles.iconContainer}>
-                            <Text style={styles.icon}>{getNotificationIcon(item.title)}</Text>
-                            {!item.read && <View style={styles.unreadDot} />}
+                refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchNotifications} />}
+                ListEmptyComponent={
+                    <View style={styles.emptyContainer}>
+                        <View style={styles.emptyIconContainer}>
+                            <Bell size={48} color={Colors.textMuted} />
                         </View>
-
-                        <View style={styles.content}>
-                            <View style={styles.contentHeader}>
-                                <Text style={styles.notificationTitle} numberOfLines={1}>
-                                    {item.title}
-                                </Text>
-                                <Text style={styles.timestamp}>
-                                    {item.createdAt?.toDate?.()?.toLocaleDateString?.() || new Date(item.createdAt).toLocaleDateString()}
-                                </Text>
-                            </View>
-                            <Text style={[styles.notificationMessage, !item.read && styles.unreadMessage]} numberOfLines={2}>
-                                {item.message}
-                            </Text>
-                        </View>
-
-                        <TouchableOpacity style={styles.deleteButton} onPress={() => handleDeleteNotification(item.id, item)}>
-                            <Trash2 size={16} color={Colors.error} />
-                        </TouchableOpacity>
+                        <Text style={styles.emptyTitle}>No notifications yet</Text>
+                        <Text style={styles.emptyText}>When you receive notifications, they will appear here</Text>
                     </View>
-                )}
+                }
             />
         </SafeAreaView>
     )
@@ -226,141 +302,179 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: Colors.background,
     },
-    headerSection: {
+    header: {
+        padding: 20,
         backgroundColor: Colors.white,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
-    header: {
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "center",
-    },
-    title: {
+    headerTitle: {
         fontSize: 24,
         fontWeight: "bold",
         color: Colors.charcoal,
     },
-    clearButton: {
-        padding: 8,
-    },
-    unreadBadgeContainer: {
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: 20,
-        paddingBottom: 12,
-        gap: 8,
-    },
-    unreadBadge: {
-        backgroundColor: Colors.primary,
-        paddingHorizontal: 8,
-        paddingVertical: 2,
-        borderRadius: 12,
-    },
-    unreadBadgeText: {
-        color: Colors.white,
-        fontSize: 12,
-        fontWeight: "bold",
-    },
-    unreadText: {
-        fontSize: 12,
-        color: Colors.text,
-    },
-    loadingContainer: {
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
+    headerSubtitle: {
+        fontSize: 14,
+        color: Colors.textMuted,
+        marginTop: 4,
     },
     list: {
         padding: 16,
+        gap: 12,
     },
-    sectionHeader: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: Colors.textMuted,
-        marginBottom: 12,
-        marginTop: 16,
-    },
-    notificationCard: {
-        flexDirection: "row",
+    card: {
         backgroundColor: Colors.white,
-        borderRadius: 12,
-        padding: 12,
-        marginBottom: 10,
+        borderRadius: 16,
+        padding: 16,
         borderWidth: 1,
         borderColor: Colors.border,
-        alignItems: "flex-start",
+        marginBottom: 4,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 1 },
+        shadowOpacity: 0.05,
+        shadowRadius: 2,
+        elevation: 1,
     },
     unreadCard: {
-        backgroundColor: Colors.secondary,
-        borderColor: Colors.primary,
+        borderLeftWidth: 4,
+        borderLeftColor: Colors.primary,
+        backgroundColor: "#FAFBFF",
+    },
+    cardHeader: {
+        flexDirection: "row",
+        gap: 12,
+        marginBottom: 12,
     },
     iconContainer: {
-        position: "relative",
-        marginRight: 12,
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        alignItems: "center",
+        justifyContent: "center",
     },
-    icon: {
-        fontSize: 24,
+    headerContent: {
+        flex: 1,
+    },
+    titleRow: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 8,
+    },
+    notifTitle: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: Colors.charcoal,
+        flex: 1,
+    },
+    unreadTitle: {
+        fontWeight: "700",
+        color: Colors.charcoal,
     },
     unreadDot: {
-        position: "absolute",
         width: 8,
         height: 8,
         borderRadius: 4,
         backgroundColor: Colors.primary,
-        top: -4,
-        right: -4,
-    },
-    content: {
-        flex: 1,
-    },
-    contentHeader: {
-        flexDirection: "row",
-        justifyContent: "space-between",
-        alignItems: "flex-start",
-        marginBottom: 4,
-    },
-    notificationTitle: {
-        fontSize: 14,
-        fontWeight: "600",
-        color: Colors.charcoal,
-        flex: 1,
     },
     timestamp: {
-        fontSize: 11,
+        fontSize: 12,
         color: Colors.textMuted,
-        marginLeft: 8,
+        marginTop: 2,
     },
-    notificationMessage: {
-        fontSize: 13,
-        color: Colors.textMuted,
-        lineHeight: 18,
+    messageContainer: {
+        marginBottom: 12,
+        paddingLeft: 56,
     },
-    unreadMessage: {
+    message: {
+        fontSize: 14,
         color: Colors.text,
+        lineHeight: 20,
+    },
+    orderIdContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        backgroundColor: "#F0F9FF",
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+        marginBottom: 12,
+        marginLeft: 56,
+        alignSelf: "flex-start",
+    },
+    orderIdText: {
+        fontSize: 13,
+        color: Colors.primary,
+        fontWeight: "600",
+    },
+    actionsContainer: {
+        flexDirection: "row",
+        gap: 8,
+        marginLeft: 56,
+    },
+    reorderButton: {
+        flex: 1,
+        backgroundColor: Colors.primary,
+        borderRadius: 10,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+    },
+    reorderButtonText: {
+        color: Colors.white,
+        fontWeight: "600",
+        fontSize: 14,
+        flex: 1,
+        textAlign: "center",
     },
     deleteButton: {
-        padding: 8,
-        marginLeft: 8,
+        flexDirection: "row",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 6,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        borderRadius: 10,
+        backgroundColor: "#FEF2F2",
+        borderWidth: 1,
+        borderColor: "#FECACA",
+    },
+    deleteButtonSmall: {
+        paddingHorizontal: 12,
+    },
+    deleteButtonText: {
+        color: Colors.error,
+        fontWeight: "600",
+        fontSize: 14,
     },
     emptyContainer: {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
-        padding: 24,
+        paddingVertical: 80,
+    },
+    emptyIconContainer: {
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: "#F3F4F6",
+        alignItems: "center",
+        justifyContent: "center",
+        marginBottom: 20,
     },
     emptyTitle: {
-        fontSize: 18,
-        fontWeight: "600",
+        fontSize: 20,
+        fontWeight: "bold",
         color: Colors.charcoal,
-        marginTop: 16,
         marginBottom: 8,
     },
     emptyText: {
         fontSize: 14,
         color: Colors.textMuted,
         textAlign: "center",
+        paddingHorizontal: 40,
     },
 })

@@ -1,14 +1,13 @@
 "use client"
 
 import { useState } from "react"
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Modal } from "react-native"
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
 import { Colors } from "@/constants/Colors"
 import { useAuth } from "@/context/AuthContext"
-import { emailVerificationService } from "@/services/emailVerificationService"
 
 export default function SignupScreen() {
   const [formData, setFormData] = useState({
@@ -21,9 +20,6 @@ export default function SignupScreen() {
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [showVerification, setShowVerification] = useState(false)
-  const [verificationCode, setVerificationCode] = useState("")
-  const [verifyingCode, setVerifyingCode] = useState(false)
   const { signup } = useAuth()
 
   const handleSignup = async () => {
@@ -51,34 +47,6 @@ export default function SignupScreen() {
       setLoading(true)
       setError("")
 
-      // Generate and send verification code
-      await emailVerificationService.generateVerificationCode(formData.email)
-      setShowVerification(true)
-    } catch (err: any) {
-      setError(err.message || "Failed to send verification code")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleVerifyAndSignup = async () => {
-    if (!verificationCode || verificationCode.length !== 6) {
-      setError("Please enter a valid 6-digit code")
-      return
-    }
-
-    try {
-      setVerifyingCode(true)
-      setError("")
-
-      const isValid = await emailVerificationService.verifyCode(formData.email, verificationCode)
-
-      if (!isValid) {
-        setError("Invalid or expired verification code")
-        return
-      }
-
-      // Create account after verification
       await signup(formData.email, formData.password, formData.name, formData.mobile)
 
       Alert.alert("Success", "Account created successfully!", [
@@ -90,7 +58,7 @@ export default function SignupScreen() {
     } catch (err: any) {
       setError(err.message || "Signup failed. Please try again.")
     } finally {
-      setVerifyingCode(false)
+      setLoading(false)
     }
   }
 
@@ -147,7 +115,7 @@ export default function SignupScreen() {
           {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
           <Button
-            title={loading ? "Sending verification code..." : "Create Account"}
+            title={loading ? "Creating account..." : "Create Account"}
             onPress={handleSignup}
             disabled={loading}
             style={styles.signupButton}
@@ -161,50 +129,6 @@ export default function SignupScreen() {
           </View>
         </View>
       </ScrollView>
-
-      <Modal
-        visible={showVerification}
-        transparent
-        animationType="slide"
-        onRequestClose={() => !verifyingCode && setShowVerification(false)}
-      >
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.verificationContent}>
-            <Text style={styles.verificationTitle}>Verify Your Email</Text>
-            <Text style={styles.verificationSubtitle}>We've sent a 6-digit code to {formData.email}</Text>
-
-            <Input
-              label="Verification Code"
-              placeholder="000000"
-              value={verificationCode}
-              onChangeText={setVerificationCode}
-              keyboardType="number-pad"
-              maxLength={6}
-              editable={!verifyingCode}
-            />
-
-            {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-            <Button
-              title={verifyingCode ? "Verifying..." : "Verify & Create Account"}
-              onPress={handleVerifyAndSignup}
-              disabled={verifyingCode}
-              style={styles.verifyButton}
-            />
-
-            <Button
-              title="Back"
-              onPress={() => {
-                setShowVerification(false)
-                setVerificationCode("")
-                setError("")
-              }}
-              disabled={verifyingCode}
-              style={[styles.verifyButton, styles.backButton]}
-            />
-          </View>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   )
 }
@@ -254,30 +178,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.primary,
     fontWeight: "600",
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  verificationContent: {
-    padding: 20,
-    gap: 16,
-  },
-  verificationTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: Colors.charcoal,
-    marginBottom: 8,
-  },
-  verificationSubtitle: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    marginBottom: 24,
-  },
-  verifyButton: {
-    marginTop: 8,
-  },
-  backButton: {
-    backgroundColor: Colors.neutralGray,
   },
 })

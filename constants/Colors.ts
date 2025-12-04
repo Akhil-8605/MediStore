@@ -1,6 +1,7 @@
 export const Colors = {
-  primary: '#009521',      // Primary Green
-  secondary: '#E6F7EB',    // Soft Mint
+  primary: '#009521', 
+  logoback: '#E6F7EB',     // Primary Green
+  secondary: '#000000ff',    // Soft Mint
   darkGreen: '#006D18',    // Dark Green
   white: '#FFFFFF',        // White
   neutralGray: '#DDE2E5',  // Neutral Gray

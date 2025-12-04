@@ -1,6 +1,5 @@
-import { doc, updateDoc, arrayUnion, Timestamp, getDoc } from "firebase/firestore"
 import { db } from "@/config/firebase"
-import { reminderService } from "./reminderService"
+import { arrayUnion, doc, getDoc, Timestamp, updateDoc } from "firebase/firestore"
 import { addPaymentRecord, updateMedicineStock } from "./adminService"
 
 export const orderService = {
@@ -12,7 +11,7 @@ export const orderService = {
         reminderDays?: number,
     ): Promise<string> {
         try {
-            const orderId = `order_${Date.now()}`
+            const orderId = `ORD-${Date.now()}`
             const userRef = doc(db, "AllUsers", userId)
 
             const userSnap = await getDoc(userRef)
@@ -25,12 +24,13 @@ export const orderService = {
 
             // Create order object
             const order = {
-                id: orderId,
+                orderId,
                 items,
-                totalAmount,
+                total: totalAmount,
                 paymentMethod,
                 paymentStatus: "Success",
-                createdAt: Timestamp.now(),
+                status: "pending",
+                createdAt: new Date().toISOString(),
             }
 
             // Add order to user's orders array
@@ -52,22 +52,29 @@ export const orderService = {
                 await updateMedicineStock(item.id, item.quantity)
             }
 
-            // Add reminders for each medicine if requested
             if (reminderDays && reminderDays > 0) {
-                for (const item of items) {
-                    await reminderService.addReminder(userId, {
-                        medicineId: item.id,
-                        medicineName: item.name,
-                        quantity: item.quantity,
-                        orderedDate: Timestamp.now(),
-                        reminderDays,
-                    })
+                const dueDate = new Date()
+                dueDate.setDate(dueDate.getDate() + reminderDays)
+
+                const reminder = {
+                    id: `reminder_${Date.now()}`,
+                    orderId,
+                    reminderDays,
+                    createdAt: new Date().toISOString(),
+                    dueAt: dueDate.toISOString(),
+                    notified: false,
+                    medicineIds: items.map((item) => item.id),
                 }
+
+                await updateDoc(userRef, {
+                    reminders: arrayUnion(reminder),
+                })
             }
 
+            console.log("Order completed:", orderId)
             return orderId
         } catch (error) {
-            console.error("[v0] Error completing order:", error)
+            console.error("Error completing order:", error)
             throw error
         }
     },

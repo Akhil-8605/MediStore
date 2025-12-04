@@ -2,46 +2,186 @@
 
 import { Colors } from "@/constants/Colors"
 import { router } from "expo-router"
-import { DollarSign, ShoppingBag, Users, Pill, Clock } from "lucide-react-native"
-import { useEffect } from "react"
+import { DollarSign, ShoppingBag, Users, Pill, Clock, AlertTriangle } from "lucide-react-native"
+import { useEffect, useState, useCallback } from "react"
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { useAdmin } from "@/context/AdminContext"
 import { useAuth } from "@/context/AuthContext"
+import { collection, getDocs } from "firebase/firestore"
+import { db } from "@/config/firebase"
+
+interface DashboardStats {
+  totalRevenue: number
+  totalOrders: number
+  totalUsers: number
+  totalMedicines: number
+  lowStockCount: number
+}
+
+interface Medicine {
+  id: string
+  name: string
+  totalQuantity: number
+  lowStockAlert: number
+  type?: string
+}
+
+interface RecentActivity {
+  id: string
+  type: string
+  message: string
+  timestamp: any
+  details?: any
+}
 
 export default function AdminDashboard() {
-  const { stats, lowStockMedicines, recentActivity, loading, refreshDashboard } = useAdmin()
   const { logout } = useAuth()
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [lowStockMedicines, setLowStockMedicines] = useState<Medicine[]>([])
+  const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      // Fetch all users and their orders
+      const usersSnapshot = await getDocs(collection(db, "AllUsers"))
+      let totalUsers = 0
+      let totalOrders = 0
+      const activities: RecentActivity[] = []
+      const startOfDay = new Date()
+      startOfDay.setDate(startOfDay.getDate() - 7) // Last 7 days
+      startOfDay.setHours(0, 0, 0, 0)
+
+      usersSnapshot.forEach((userDoc) => {
+        totalUsers++
+        const userData = userDoc.data()
+        const orders = userData.orders || []
+        totalOrders += orders.length
+
+        // Collect recent activities
+        orders.forEach((order: any) => {
+          const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt)
+          if (orderDate > startOfDay) {
+            activities.push({
+              id: order.orderId || Math.random().toString(),
+              type: "order",
+              message: `New order from ${userData.name || "User"}`,
+              timestamp: order.createdAt,
+              details: {
+                userName: userData.name,
+                amount: order.total || order.totalAmount,
+                items: order.items,
+              },
+            })
+          }
+        })
+      })
+
+      // Fetch delivered orders for revenue
+      const deliveredSnapshot = await getDocs(collection(db, "DeliveredOrders"))
+      let totalRevenue = 0
+      deliveredSnapshot.forEach((doc) => {
+        const order = doc.data()
+        totalRevenue += order.totalAmount || 0
+      })
+
+      // Fetch medicines for stock info
+      const medicinesSnapshot = await getDocs(collection(db, "AllMedicines"))
+      let totalMedicines = 0
+      let lowStockCount = 0
+      const lowStock: Medicine[] = []
+
+      medicinesSnapshot.forEach((medDoc) => {
+        const medicine = medDoc.data()
+        totalMedicines++
+        const qty = medicine.totalQuantity || 0
+        const alert = medicine.lowStockAlert || 10
+        if (qty <= alert) {
+          lowStockCount++
+          lowStock.push({
+            id: medDoc.id,
+            name: medicine.name,
+            totalQuantity: qty,
+            lowStockAlert: alert,
+            type: medicine.type,
+          })
+        }
+      })
+
+      // Sort activities by timestamp (newest first)
+      activities.sort((a, b) => {
+        const dateA = a.timestamp?.toDate?.() || new Date(a.timestamp)
+        const dateB = b.timestamp?.toDate?.() || new Date(b.timestamp)
+        return dateB.getTime() - dateA.getTime()
+      })
+
+      // Sort low stock by quantity (lowest first)
+      lowStock.sort((a, b) => a.totalQuantity - b.totalQuantity)
+
+      setStats({
+        totalRevenue,
+        totalOrders,
+        totalUsers,
+        totalMedicines,
+        lowStockCount,
+      })
+      setLowStockMedicines(lowStock)
+      setRecentActivity(activities.slice(0, 10))
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }, [])
 
   useEffect(() => {
-    refreshDashboard()
-  }, [refreshDashboard])
+    fetchDashboardData()
+  }, [fetchDashboardData])
+
+  const onRefresh = () => {
+    setRefreshing(true)
+    fetchDashboardData()
+  }
+
+  const formatTime = (timestamp: any) => {
+    try {
+      const date = timestamp?.toDate?.() || new Date(timestamp)
+      return date.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch {
+      return "N/A"
+    }
+  }
 
   const STATS = [
     {
       title: "Total Revenue",
-      value: `$${stats?.totalRevenue.toFixed(2) || "0.00"}`,
+      value: `₹${stats?.totalRevenue?.toFixed(2) || "0.00"}`,
       icon: DollarSign,
       color: "#059669",
       bg: "#D1FAE5",
     },
     {
       title: "Total Orders",
-      value: stats?.totalOrders || "0",
+      value: stats?.totalOrders?.toString() || "0",
       icon: ShoppingBag,
       color: "#2563EB",
       bg: "#DBEAFE",
     },
     {
       title: "Active Users",
-      value: stats?.totalUsers || "0",
+      value: stats?.totalUsers?.toString() || "0",
       icon: Users,
       color: "#7C3AED",
       bg: "#EDE9FE",
     },
     {
-      title: "Stock Medicines",
-      value: stats?.totalMedicines || "0",
+      title: "Total Medicines",
+      value: stats?.totalMedicines?.toString() || "0",
       icon: Pill,
       color: "#EA580C",
       bg: "#FFEDD5",
@@ -52,7 +192,7 @@ export default function AdminDashboard() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={refreshDashboard} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         <View style={styles.header}>
           <View>
@@ -70,81 +210,89 @@ export default function AdminDashboard() {
           </TouchableOpacity>
         </View>
 
-        {/* Stats Grid */}
-        <View style={styles.statsGrid}>
-          {STATS.map((stat, index) => (
-            <View key={index} style={styles.statCard}>
-              <View style={[styles.iconContainer, { backgroundColor: stat.bg }]}>
-                <stat.icon size={24} color={stat.color} />
-              </View>
-              <Text style={styles.statValue}>{stat.value}</Text>
-              <Text style={styles.statTitle}>{stat.title}</Text>
-            </View>
-          ))}
-        </View>
-
-        {/* Low Stock Alerts */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Low Stock Alerts</Text>
-            <TouchableOpacity onPress={() => router.push("/admin/medicines")}>
-              <Text style={styles.seeAll}>Manage Stock</Text>
-            </TouchableOpacity>
-          </View>
-
-          {loading ? (
+        {loading ? (
+          <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={Colors.primary} />
-          ) : lowStockMedicines.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>All medicines are well stocked!</Text>
-            </View>
-          ) : (
-            lowStockMedicines.map((item) => (
-              <View key={item.id} style={styles.alertCard}>
-                <View style={styles.alertInfo}>
-                  <Text style={styles.alertName}>{item.name}</Text>
-                  <Text style={styles.alertStock}>
-                    Stock: <Text style={{ fontWeight: "bold" }}>{item.currentQuantity}</Text> / {item.lowStockAlert}{" "}
-                    threshold
-                  </Text>
-                </View>
-                <View style={styles.alertBadge}>
-                  <Text style={styles.alertBadgeText}>Restock Needed</Text>
-                </View>
-              </View>
-            ))
-          )}
-        </View>
-
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
-            <Text style={styles.seeAll}>Today</Text>
           </View>
-
-          {loading ? (
-            <ActivityIndicator size="large" color={Colors.primary} />
-          ) : recentActivity.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No recent activity to show.</Text>
+        ) : (
+          <>
+            {/* Stats Grid */}
+            <View style={styles.statsGrid}>
+              {STATS.map((stat, index) => (
+                <View key={index} style={styles.statCard}>
+                  <View style={[styles.iconContainer, { backgroundColor: stat.bg }]}>
+                    <stat.icon size={24} color={stat.color} />
+                  </View>
+                  <Text style={styles.statValue}>{stat.value}</Text>
+                  <Text style={styles.statTitle}>{stat.title}</Text>
+                </View>
+              ))}
             </View>
-          ) : (
-            recentActivity.slice(0, 5).map((activity) => (
-              <View key={activity.id} style={styles.activityCard}>
-                <View style={styles.activityIconContainer}>
-                  <Clock size={16} color={Colors.primary} />
+
+            {/* Low Stock Alerts */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <AlertTriangle size={18} color="#DC2626" />
+                  <Text style={styles.sectionTitle}>Low Stock Alerts ({lowStockMedicines.length})</Text>
                 </View>
-                <View style={styles.activityContent}>
-                  <Text style={styles.activityMessage}>{activity.message}</Text>
-                  <Text style={styles.activityTime}>{activity.timestamp.toDate().toLocaleTimeString()}</Text>
-                </View>
-                {activity.details?.amount && (
-                  <Text style={styles.activityAmount}>${activity.details.amount.toFixed(2)}</Text>
-                )}
+                <TouchableOpacity onPress={() => router.push("/admin/medicines")}>
+                  <Text style={styles.seeAll}>Manage Stock</Text>
+                </TouchableOpacity>
               </View>
-            ))
-          )}
-        </View>
+
+              {lowStockMedicines.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>All medicines are well stocked!</Text>
+                </View>
+              ) : (
+                lowStockMedicines.slice(0, 5).map((item) => (
+                  <View key={item.id} style={styles.alertCard}>
+                    <View style={styles.alertInfo}>
+                      <Text style={styles.alertName}>{item.name}</Text>
+                      <Text style={styles.alertStock}>
+                        Stock: <Text style={{ fontWeight: "bold" }}>{item.totalQuantity}</Text> / {item.lowStockAlert}{" "}
+                        threshold
+                      </Text>
+                    </View>
+                    <View style={styles.alertBadge}>
+                      <Text style={styles.alertBadgeText}>Restock Needed</Text>
+                    </View>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* Recent Activity */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Recent Activity</Text>
+                <Text style={styles.seeAll}>Last 7 days</Text>
+              </View>
+
+              {recentActivity.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyText}>No recent activity to show.</Text>
+                </View>
+              ) : (
+                recentActivity.map((activity) => (
+                  <View key={activity.id} style={styles.activityCard}>
+                    <View style={styles.activityIconContainer}>
+                      <Clock size={16} color={Colors.primary} />
+                    </View>
+                    <View style={styles.activityContent}>
+                      <Text style={styles.activityMessage}>{activity.message}</Text>
+                      <Text style={styles.activityTime}>{formatTime(activity.timestamp)}</Text>
+                    </View>
+                    {activity.details?.amount && (
+                      <Text style={styles.activityAmount}>₹{activity.details.amount.toFixed(2)}</Text>
+                    )}
+                  </View>
+                ))
+              )}
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   )
@@ -157,6 +305,12 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 100,
   },
   header: {
     flexDirection: "row",
@@ -225,6 +379,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: 16,
+  },
+  sectionTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 18,

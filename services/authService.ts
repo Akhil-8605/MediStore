@@ -17,7 +17,9 @@ export interface UserData {
     orders: any[]
     reorders: any[]
     notifications: any[]
+    reminders: any[]
     reminderDates?: any[]
+    reorderCount?: number
 }
 
 export const authService = {
@@ -36,7 +38,9 @@ export const authService = {
             orders: [],
             reorders: [],
             notifications: [],
+            reminders: [],
             reminderDates: [],
+            reorderCount: 0,
         }
 
         await setDoc(doc(db, "AllUsers", user.uid), userData)
@@ -68,7 +72,9 @@ export const authService = {
                 orders: [],
                 reorders: [],
                 notifications: [],
+                reminders: [],
                 reminderDates: [],
+                reorderCount: 0,
             }
             await setDoc(doc(db, "AllUsers", user.uid), userData)
         }

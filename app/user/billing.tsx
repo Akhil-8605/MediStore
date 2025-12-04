@@ -1,46 +1,77 @@
 "use client"
 
 import { useState } from "react"
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, Alert } from "react-native"
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Linking } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Colors } from "@/constants/Colors"
 import { useCart } from "@/context/CartContext"
 import { useAuth } from "@/context/AuthContext"
 import { Button } from "@/components/ui/Button"
-import { MapPin } from "lucide-react-native"
-import { paymentService } from "@/services/paymentService"
+import { MapPin, Smartphone } from "lucide-react-native"
 import { firestoreService, type Order } from "@/services/firestoreService"
 import { receiptService } from "@/services/recieptService"
-import { router } from "expo-router"
-
-const SHIPPING_COST = 50
+import { router, useRouter, useLocalSearchParams } from "expo-router"
+import { orderService } from "@/services/orderService"
 
 export default function BillingScreen() {
     const { items, total, clearCart } = useCart()
     const { user, userData } = useAuth()
     const [paymentMethod, setPaymentMethod] = useState<"COD" | "UPI">("COD")
+    const [upiChoice, setUpiChoice] = useState<"phonpe" | "googlepay" | "other" | null>(null)
     const [deliveryAddress, setDeliveryAddress] = useState("")
     const [loading, setLoading] = useState(false)
-    const [qrCode, setQrCode] = useState<string | null>(null)
-    const [showQRCode, setShowQRCode] = useState(false)
+    const [showUPIOptions, setShowUPIOptions] = useState(false)
+    const routerInstance = useRouter()
+    const params = useLocalSearchParams()
 
-    const finalTotal = total + SHIPPING_COST
+    const reminderDays = Number.parseInt((params.reminderDays as string) || "0")
+
+    const finalTotal = total
     const orderId = `ORD-${Date.now()}`
 
-    const handleGenerateQR = async () => {
+    const handleUPIApp = async (app: "phonpe" | "googlepay" | "other") => {
         try {
             setLoading(true)
-            const qr = await paymentService.generateUPIQRCode(finalTotal)
-            setQrCode(qr)
-            setShowQRCode(true)
+            setUpiChoice(app)
+
+            // Generate UPI string based on selected app
+            const upiId = "akhilesh-adam@ybl"
+            let deepLink = ""
+
+            switch (app) {
+                case "phonpe":
+                    deepLink = `phonepe://pay?to=${upiId}&amount=${finalTotal}&tr_id=${orderId}`
+                    break
+                case "googlepay":
+                    deepLink = `gpay://upi/pay?pa=${upiId}&am=${finalTotal}&tn=MediStore&tr=order_${orderId}`
+                    break
+                case "other":
+                    deepLink = `upi://pay?pa=${upiId}&am=${finalTotal}&tn=MediStore&tr=order_${orderId}`
+                    break
+            }
+
+            const canOpen = await Linking.canOpenURL(deepLink)
+            if (canOpen) {
+                await Linking.openURL(deepLink)
+                // After user completes payment in app, show confirmation
+                Alert.alert("Payment Initiated", "Complete payment in your UPI app and return here")
+                // Assume payment successful for now (in real app, use webhook)
+                await completeOrderPayment()
+            } else {
+                Alert.alert(
+                    "Error",
+                    `${app === "phonpe" ? "PhonePe" : app === "googlepay" ? "Google Pay" : "UPI app"} is not installed`,
+                )
+            }
         } catch (error) {
-            Alert.alert("Error", "Failed to generate QR code")
+            Alert.alert("Error", "Failed to open UPI app")
+            console.error(error)
         } finally {
             setLoading(false)
         }
     }
 
-    const handlePayment = async () => {
+    const completeOrderPayment = async () => {
         if (!deliveryAddress.trim()) {
             Alert.alert("Error", "Please enter delivery address")
             return
@@ -54,7 +85,6 @@ export default function BillingScreen() {
         try {
             setLoading(true)
 
-            // Create order object
             const order: Order = {
                 orderId,
                 items,
@@ -78,21 +108,11 @@ export default function BillingScreen() {
                 ),
             }
 
-            // Process payment
-            if (paymentMethod === "COD") {
-                const success = await paymentService.processCODPayment(orderId, finalTotal)
-                if (!success) {
-                    Alert.alert("Error", "Payment processing failed")
-                    return
-                }
-            } else {
-                // For UPI, show QR code
-                await handleGenerateQR()
-            }
-
             // Save order to Firestore
             if (user) {
                 await firestoreService.addOrder(user.uid, order)
+
+                await orderService.completeOrder(user.uid, items, finalTotal, paymentMethod, reminderDays)
 
                 // Add notification
                 await firestoreService.addNotification(user.uid, {
@@ -129,30 +149,77 @@ export default function BillingScreen() {
         }
     }
 
-    if (showQRCode && qrCode) {
+    const handlePayment = async () => {
+        if (!deliveryAddress.trim()) {
+            Alert.alert("Error", "Please enter delivery address")
+            return
+        }
+
+        if (items.length === 0) {
+            Alert.alert("Error", "Cart is empty")
+            return
+        }
+
+        try {
+            setLoading(true)
+
+            if (paymentMethod === "COD") {
+                await completeOrderPayment()
+            } else {
+                // For UPI, show UPI app options
+                setShowUPIOptions(true)
+            }
+        } catch (error: any) {
+            Alert.alert("Error", error.message || "Failed to place order")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    if (showUPIOptions) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.header}>
-                    <TouchableOpacity onPress={() => setShowQRCode(false)}>
+                    <TouchableOpacity onPress={() => setShowUPIOptions(false)}>
                         <Text style={styles.backButton}>← Back</Text>
                     </TouchableOpacity>
-                    <Text style={styles.title}>Scan to Pay</Text>
+                    <Text style={styles.title}>Select UPI App</Text>
                 </View>
 
-                <ScrollView contentContainerStyle={styles.qrContent}>
-                    <View style={styles.qrContainer}>
-                        <Image source={{ uri: qrCode }} style={styles.qrImage} />
-                        <Text style={styles.qrAmount}>Amount: ₹{finalTotal.toFixed(2)}</Text>
-                        <Text style={styles.upiId}>To: 8605050804-2@ybl</Text>
+                <ScrollView contentContainerStyle={styles.upiContent}>
+                    <View style={styles.amountCard}>
+                        <Text style={styles.amountLabel}>Total Amount</Text>
+                        <Text style={styles.amountValue}>₹{finalTotal.toFixed(2)}</Text>
+                    </View>
+
+                    <View style={styles.upiOptions}>
+                        <TouchableOpacity style={styles.upiOption} onPress={() => handleUPIApp("phonpe")} disabled={loading}>
+                            <View style={styles.upiIconContainer}>
+                                <Smartphone size={32} color="#5F27CD" />
+                            </View>
+                            <Text style={styles.upiOptionName}>PhonePe</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.upiOption} onPress={() => handleUPIApp("googlepay")} disabled={loading}>
+                            <View style={styles.upiIconContainer}>
+                                <Smartphone size={32} color="#4285F4" />
+                            </View>
+                            <Text style={styles.upiOptionName}>Google Pay</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.upiOption} onPress={() => handleUPIApp("other")} disabled={loading}>
+                            <View style={styles.upiIconContainer}>
+                                <Smartphone size={32} color="#1F2937" />
+                            </View>
+                            <Text style={styles.upiOptionName}>Other UPI App</Text>
+                        </TouchableOpacity>
                     </View>
 
                     <Button
-                        title="Confirm Payment"
-                        onPress={() => {
-                            Alert.alert("Success", "Payment confirmed!")
-                            handlePayment()
-                        }}
-                        style={styles.confirmButton}
+                        title="Back"
+                        onPress={() => setShowUPIOptions(false)}
+                        disabled={loading}
+                        style={styles.backButtonStyle}
                     />
                 </ScrollView>
             </SafeAreaView>
@@ -166,7 +233,7 @@ export default function BillingScreen() {
                     <Text style={styles.title}>Billing Details</Text>
                 </View>
 
-                {/* Order Summary */}
+                {/* Order Summary - removed shipping row */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Summary</Text>
                     <View style={styles.summaryCard}>
@@ -177,14 +244,6 @@ export default function BillingScreen() {
                             </View>
                         ))}
                         <View style={styles.divider} />
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.label}>Subtotal</Text>
-                            <Text style={styles.value}>₹{total.toFixed(2)}</Text>
-                        </View>
-                        <View style={styles.summaryRow}>
-                            <Text style={styles.label}>Shipping</Text>
-                            <Text style={styles.value}>₹{SHIPPING_COST.toFixed(2)}</Text>
-                        </View>
                         <View style={[styles.summaryRow, styles.totalRow]}>
                             <Text style={styles.totalLabel}>Total</Text>
                             <Text style={styles.totalValue}>₹{finalTotal.toFixed(2)}</Text>
@@ -232,7 +291,7 @@ export default function BillingScreen() {
                         <View style={styles.radio}>{paymentMethod === "UPI" && <View style={styles.radioDot} />}</View>
                         <View style={styles.paymentContent}>
                             <Text style={styles.paymentTitle}>Online Payment (UPI)</Text>
-                            <Text style={styles.paymentDesc}>Secure payment via QR code</Text>
+                            <Text style={styles.paymentDesc}>Pay using PhonePe, Google Pay, or other UPI apps</Text>
                         </View>
                     </TouchableOpacity>
                 </View>
@@ -365,7 +424,7 @@ const styles = StyleSheet.create({
     },
     selectedPayment: {
         borderColor: Colors.primary,
-        backgroundColor: Colors.secondary,
+        backgroundColor: Colors.logoback,
     },
     radio: {
         width: 24,
@@ -400,34 +459,52 @@ const styles = StyleSheet.create({
         marginTop: 16,
         marginBottom: 20,
     },
-    qrContent: {
+    upiContent: {
         padding: 20,
         alignItems: "center",
-        justifyContent: "center",
     },
-    qrContainer: {
+    amountCard: {
         alignItems: "center",
         backgroundColor: Colors.white,
-        padding: 20,
+        padding: 24,
         borderRadius: 12,
-        marginBottom: 24,
+        marginBottom: 32,
+        width: "100%",
+        borderWidth: 1,
+        borderColor: Colors.border,
     },
-    qrImage: {
-        width: 250,
-        height: 250,
-        marginBottom: 16,
-    },
-    qrAmount: {
-        fontSize: 20,
-        fontWeight: "bold",
-        color: Colors.primary,
-        marginBottom: 8,
-    },
-    upiId: {
+    amountLabel: {
         fontSize: 14,
         color: Colors.textMuted,
+        marginBottom: 8,
     },
-    confirmButton: {
+    amountValue: {
+        fontSize: 32,
+        fontWeight: "bold",
+        color: Colors.primary,
+    },
+    upiOptions: {
+        width: "100%",
+        gap: 12,
+        marginBottom: 24,
+    },
+    upiOption: {
+        backgroundColor: Colors.white,
+        borderRadius: 12,
+        padding: 24,
+        alignItems: "center",
+        borderWidth: 2,
+        borderColor: Colors.border,
+    },
+    upiIconContainer: {
+        marginBottom: 12,
+    },
+    upiOptionName: {
+        fontSize: 16,
+        fontWeight: "600",
+        color: Colors.charcoal,
+    },
+    backButtonStyle: {
         width: "100%",
     },
 })

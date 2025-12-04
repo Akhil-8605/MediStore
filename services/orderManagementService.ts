@@ -1,5 +1,6 @@
 import { db } from "@/config/firebase"
-import { collection, doc, updateDoc, arrayUnion, query, where, getDocs } from "firebase/firestore"
+import { arrayUnion, collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore"
+import { addDeliveredOrder, updateMedicineStock } from "./adminService"
 import { firestoreService } from "./firestoreService"
 
 export type OrderStatus = "pending" | "delivered" | "cancelled"
@@ -15,14 +16,79 @@ export const orderManagementService = {
     // Admin: Update order status and notify user
     async updateOrderStatus(userId: string, orderId: string, newStatus: OrderStatus, notes?: string) {
         try {
-            const userRef = doc(db, "AllUsers", userId)
             const userSnap = await getDocs(query(collection(db, "AllUsers"), where("uid", "==", userId)))
 
             if (userSnap.empty) {
-                throw new Error("User not found")
+                // Try finding by document ID
+                const userDocRef = doc(db, "AllUsers", userId)
+                const userDocSnap = await getDoc(userDocRef)
+
+                if (!userDocSnap.exists()) {
+                    throw new Error("User not found")
+                }
+
+                const userData = userDocSnap.data()
+                const originalOrder = userData.orders?.find((order: any) => order.orderId === orderId)
+
+                const updatedOrders = userData.orders.map((order: any) =>
+                    order.orderId === orderId ? { ...order, status: newStatus, updatedAt: new Date().toISOString() } : order,
+                )
+
+                await updateDoc(userDocRef, {
+                    orders: updatedOrders,
+                })
+
+                if (newStatus === "delivered" && originalOrder) {
+                    // Add to DeliveredOrders collection
+                    await addDeliveredOrder({
+                        orderId: originalOrder.orderId,
+                        userId: userId,
+                        userName: userData.name || "Unknown",
+                        userEmail: userData.email || "N/A",
+                        userPhone: userData.phone || "N/A",
+                        items: originalOrder.items || [],
+                        totalAmount: originalOrder.total || 0,
+                        deliveryAddress: originalOrder.deliveryAddress || "N/A",
+                        paymentMethod: originalOrder.paymentMethod || "Unknown",
+                        createdAt: originalOrder.createdAt || new Date().toISOString(),
+                    })
+
+                    // Update medicine stock (subtract quantities)
+                    for (const item of originalOrder.items || []) {
+                        if (item.id) {
+                            await updateMedicineStock(item.id, item.quantity || 1)
+                        }
+                    }
+                }
+
+                // Send notification to user
+                const statusMessages = {
+                    pending: `Your order ${orderId} is being processed`,
+                    delivered: `Your order ${orderId} has been delivered! Thank you for your purchase.`,
+                    cancelled: `Your order ${orderId} has been cancelled.`,
+                }
+
+                const notification = {
+                    id: `order-${orderId}-${Date.now()}`,
+                    title: "Order Status Updated",
+                    message: statusMessages[newStatus],
+                    timestamp: new Date().toISOString(),
+                    read: false,
+                    type: "order_status",
+                    orderId,
+                    status: newStatus,
+                }
+
+                await firestoreService.addNotification(userId, notification)
+
+                console.log("Order status updated:", orderId, "->", newStatus)
+                return true
             }
 
             const userData = userSnap.docs[0].data()
+            const userRef = doc(db, "AllUsers", userSnap.docs[0].id)
+            const originalOrder = userData.orders?.find((order: any) => order.orderId === orderId)
+
             const updatedOrders = userData.orders.map((order: any) =>
                 order.orderId === orderId ? { ...order, status: newStatus, updatedAt: new Date().toISOString() } : order,
             )
@@ -30,6 +96,29 @@ export const orderManagementService = {
             await updateDoc(userRef, {
                 orders: updatedOrders,
             })
+
+            if (newStatus === "delivered" && originalOrder) {
+                // Add to DeliveredOrders collection
+                await addDeliveredOrder({
+                    orderId: originalOrder.orderId,
+                    userId: userId,
+                    userName: userData.name || "Unknown",
+                    userEmail: userData.email || "N/A",
+                    userPhone: userData.phone || "N/A",
+                    items: originalOrder.items || [],
+                    totalAmount: originalOrder.total || 0,
+                    deliveryAddress: originalOrder.deliveryAddress || "N/A",
+                    paymentMethod: originalOrder.paymentMethod || "Unknown",
+                    createdAt: originalOrder.createdAt || new Date().toISOString(),
+                })
+
+                // Update medicine stock (subtract quantities)
+                for (const item of originalOrder.items || []) {
+                    if (item.id) {
+                        await updateMedicineStock(item.id, item.quantity || 1)
+                    }
+                }
+            }
 
             // Send notification to user
             const statusMessages = {
@@ -49,37 +138,13 @@ export const orderManagementService = {
                 status: newStatus,
             }
 
-            await firestoreService.addNotification(userId, notification)
+            await firestoreService.addNotification(userSnap.docs[0].id, notification)
 
-            console.log("[v0] Order status updated:", orderId, "->", newStatus)
+            console.log("Order status updated:", orderId, "->", newStatus)
 
             return true
         } catch (error) {
             console.error("Error updating order status:", error)
-            throw error
-        }
-    },
-
-    // Subtract medicine stock after order
-    async subtractMedicineStock(medicineId: string, quantity: number) {
-        try {
-            const medicineRef = doc(db, "AllMedicines", medicineId)
-            const medicineSnap = await getDocs(query(collection(db, "AllMedicines"), where("id", "==", medicineId)))
-
-            if (medicineSnap.empty) {
-                throw new Error("Medicine not found")
-            }
-
-            const medicineData = medicineSnap.docs[0].data()
-            const newQuantity = (medicineData.quantity || 0) - quantity
-
-            await updateDoc(medicineRef, {
-                quantity: Math.max(0, newQuantity),
-            })
-
-            console.log("[v0] Stock subtracted for medicine:", medicineId, "New quantity:", Math.max(0, newQuantity))
-        } catch (error) {
-            console.error("Error subtracting medicine stock:", error)
             throw error
         }
     },
@@ -100,6 +165,7 @@ export const orderManagementService = {
                                 userId: userDoc.id,
                                 userName: userData.name,
                                 userEmail: userData.email,
+                                userPhone: userData.phone,
                             })
                         }
                     })
@@ -129,29 +195,24 @@ export const orderManagementService = {
                 throw new Error("Original order not found")
             }
 
-            // Create new reorder
-            const reorder = {
+            const newOrder = {
                 ...originalOrder,
-                orderId: `REORDER-${Date.now()}`,
+                orderId: `ORD-${Date.now()}`,
                 originalOrderId: orderId,
                 status: "pending",
+                isReorder: true,
                 createdAt: new Date().toISOString(),
             }
 
             const userRef = doc(db, "AllUsers", userSnap.docs[0].id)
 
-            // Add to reorders array (separate from orders)
             await updateDoc(userRef, {
-                reorders: arrayUnion(reorder),
+                orders: arrayUnion(newOrder),
+                reorderCount: (userData.reorderCount || 0) + 1,
             })
 
-            // Subtract stock for reordered items
-            for (const item of reorder.items) {
-                await this.subtractMedicineStock(item.id, item.quantity)
-            }
-
-            console.log("Reorder created:", reorder.orderId)
-            return reorder
+            console.log("Reorder created:", newOrder.orderId)
+            return newOrder
         } catch (error) {
             console.error("Error handling reorder:", error)
             throw error

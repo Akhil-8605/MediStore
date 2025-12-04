@@ -36,7 +36,7 @@ export default function ReceiptScreen() {
 
             if (uri) {
                 const filename = `receipt_${orderId}_${Date.now()}.png`
-                const filepath = FileSystem.documentDirectory + filename
+                const filepath = filename
 
                 await FileSystem.copyAsync({ from: uri, to: filepath })
 

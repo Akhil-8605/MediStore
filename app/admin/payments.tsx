@@ -3,85 +3,111 @@
 import { db } from "@/config/firebase"
 import { Colors } from "@/constants/Colors"
 import { collection, getDocs } from "firebase/firestore"
-import { CheckCircle2 } from "lucide-react-native"
-import { useEffect, useState } from "react"
+import { Calendar, CheckCircle2, Mail, MapPin, Package, Phone, TrendingUp } from "lucide-react-native"
+import { useCallback, useEffect, useState } from "react"
 import { ActivityIndicator, FlatList, RefreshControl, StyleSheet, Text, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 
-interface Payment {
+interface DeliveredOrder {
   id: string
   orderId: string
+  userId: string
   userName: string
-  amount: number
-  mode: string
-  date: string
-  items: number
+  userEmail: string
+  userPhone: string
+  items: any[]
+  totalAmount: number
+  deliveryAddress: string
+  paymentMethod: string
+  deliveredAt: any
+  createdAt: string
 }
 
 export default function AdminPayments() {
-  const [payments, setPayments] = useState<Payment[]>([])
+  const [deliveredOrders, setDeliveredOrders] = useState<DeliveredOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [totalRevenue, setTotalRevenue] = useState(0)
+  const [transactionCount, setTransactionCount] = useState(0)
 
-  const fetchPayments = async () => {
+  const fetchDeliveredOrders = useCallback(async () => {
     try {
-      const paymentsSnapshot = await getDocs(collection(db, "AllPayments"))
-      const paymentsList: Payment[] = []
-      let revenue = 0
-
-      paymentsSnapshot.forEach((doc) => {
-        const data = doc.data()
-        const amount = Number.parseFloat(data.amount) || 0
-        revenue += amount
-        paymentsList.push({
-          id: doc.id,
-          orderId: data.orderId || `#ORD-${doc.id.slice(0, 8)}`,
-          userName: data.userName || "Unknown",
-          amount,
-          mode: data.mode || "Unknown",
-          date: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : "Unknown",
-          items: data.items?.length || 0,
-        })
+      const snapshot = await getDocs(collection(db, "DeliveredOrders"))
+      const orders: DeliveredOrder[] = []
+      snapshot.forEach((doc) => {
+        orders.push({ id: doc.id, ...doc.data() } as DeliveredOrder)
       })
 
-      setPayments(
-        paymentsList.sort((a, b) => {
-          const dateA = new Date(a.date).getTime()
-          const dateB = new Date(b.date).getTime()
-          return dateB - dateA
-        }),
-      )
+      // Sort by delivered date (newest first)
+      orders.sort((a, b) => {
+        const dateA = a.deliveredAt?.toDate?.() || new Date(a.createdAt)
+        const dateB = b.deliveredAt?.toDate?.() || new Date(b.createdAt)
+        return dateB.getTime() - dateA.getTime()
+      })
+
+      setDeliveredOrders(orders)
+
+      // Calculate totals
+      const revenue = orders.reduce((sum, order) => sum + (order.totalAmount || 0), 0)
       setTotalRevenue(revenue)
+      setTransactionCount(orders.length)
     } catch (error) {
-      console.error(" Error fetching payments:", error)
+      console.error("Error fetching delivered orders:", error)
     } finally {
       setLoading(false)
       setRefreshing(false)
     }
-  }
+  }, [])
 
   useEffect(() => {
-    fetchPayments()
-  }, [])
+    fetchDeliveredOrders()
+  }, [fetchDeliveredOrders])
 
   const onRefresh = () => {
     setRefreshing(true)
-    fetchPayments()
+    fetchDeliveredOrders()
+  }
+
+  const formatDateTime = (order: DeliveredOrder) => {
+    try {
+      let date: Date
+      if (order.deliveredAt?.toDate) {
+        date = order.deliveredAt.toDate()
+      } else if (order.createdAt) {
+        date = new Date(order.createdAt)
+      } else {
+        return "N/A"
+      }
+      return date.toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch {
+      return "N/A"
+    }
   }
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Payment History</Text>
+        <Text style={styles.title}>Payment & Revenue</Text>
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
+            <View style={styles.iconContainer}>
+              <TrendingUp size={20} color={Colors.primary} />
+            </View>
             <Text style={styles.summaryLabel}>Total Revenue</Text>
-            <Text style={styles.summaryValue}>${totalRevenue.toFixed(2)}</Text>
+            <Text style={styles.summaryValue}>₹{totalRevenue.toFixed(2)}</Text>
           </View>
           <View style={styles.summaryCard}>
+            <View style={styles.iconContainer}>
+              <CheckCircle2 size={20} color="#10B981" />
+            </View>
             <Text style={styles.summaryLabel}>Transactions</Text>
-            <Text style={styles.summaryValue}>{payments.length}</Text>
+            <Text style={styles.summaryValue}>{transactionCount}</Text>
           </View>
         </View>
       </View>
@@ -92,34 +118,79 @@ export default function AdminPayments() {
         </View>
       ) : (
         <FlatList
-          data={payments}
-          keyExtractor={(item) => item.id}
+          data={deliveredOrders}
+          keyExtractor={(item) => item.id || item.orderId}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
           renderItem={({ item }) => (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
-                <Text style={styles.orderId}>{item.orderId}</Text>
-                <Text style={styles.amount}>${item.amount.toFixed(2)}</Text>
+                <Text style={styles.orderId}>#{item.orderId?.substring(0, 12) || "N/A"}</Text>
+                <Text style={styles.amount}>₹{item.totalAmount?.toFixed(2) || "0.00"}</Text>
               </View>
-              <View style={styles.cardBody}>
-                <Text style={styles.user}>{item.userName}</Text>
+
+              {/* User Info Section */}
+              <View style={styles.userSection}>
+                <Text style={styles.userName}>{item.userName || "Unknown"}</Text>
+                <View style={styles.userInfoRow}>
+                  <Mail size={12} color={Colors.textMuted} />
+                  <Text style={styles.userInfoText}>{item.userEmail || "N/A"}</Text>
+                </View>
+                <View style={styles.userInfoRow}>
+                  <Phone size={12} color={Colors.textMuted} />
+                  <Text style={styles.userInfoText}>{item.userPhone || "N/A"}</Text>
+                </View>
+                <View style={styles.userInfoRow}>
+                  <MapPin size={12} color={Colors.textMuted} />
+                  <Text style={styles.userInfoText} numberOfLines={1}>
+                    {item.deliveryAddress || "N/A"}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Items Section */}
+              <View style={styles.itemsSection}>
+                <View style={styles.itemsHeader}>
+                  <Package size={14} color={Colors.charcoal} />
+                  <Text style={styles.itemsTitle}>{item.items?.length || 0} Items</Text>
+                </View>
+                {item.items?.map((orderItem, idx) => (
+                  <View key={idx} style={styles.itemRow}>
+                    <Text style={styles.itemName} numberOfLines={1}>
+                      {orderItem.name}
+                    </Text>
+                    <Text style={styles.itemQty}>x{orderItem.quantity || orderItem.totalQuantity || 1}</Text>
+                    <Text style={styles.itemPrice}>
+                      ₹{((orderItem.price || 0) * (orderItem.quantity || orderItem.totalQuantity || 1)).toFixed(2)}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.cardFooter}>
                 <View style={styles.detailsRow}>
-                  <Text style={styles.date}>{item.date}</Text>
-                  <View style={[styles.modeBadge, item.mode === "COD" ? styles.codBadge : styles.upiBADGE]}>
-                    <Text style={styles.modeText}>{item.mode}</Text>
+                  <View style={styles.dateRow}>
+                    <Calendar size={12} color={Colors.textMuted} />
+                    <Text style={styles.date}>{formatDateTime(item)}</Text>
+                  </View>
+                  <View style={[styles.modeBadge, item.paymentMethod === "COD" ? styles.codBadge : styles.upiBadge]}>
+                    <Text style={styles.modeText}>{item.paymentMethod || "N/A"}</Text>
                   </View>
                 </View>
-                <Text style={styles.itemsCount}>{item.items} items</Text>
-              </View>
-              <View style={styles.cardFooter}>
                 <View style={styles.statusBadge}>
                   <CheckCircle2 size={12} color="#166534" />
-                  <Text style={styles.statusText}>Completed</Text>
+                  <Text style={styles.statusText}>Delivered</Text>
                 </View>
               </View>
             </View>
           )}
+          ListEmptyComponent={
+            <View style={styles.emptyContainer}>
+              <Package size={48} color={Colors.textMuted} />
+              <Text style={styles.emptyTitle}>No delivered orders yet</Text>
+              <Text style={styles.emptyText}>Delivered orders will appear here</Text>
+            </View>
+          }
         />
       )}
     </SafeAreaView>
@@ -150,10 +221,13 @@ const styles = StyleSheet.create({
   summaryCard: {
     flex: 1,
     backgroundColor: "#F8FAFC",
-    padding: 12,
+    padding: 16,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+  },
+  iconContainer: {
+    marginBottom: 8,
   },
   summaryLabel: {
     fontSize: 12,
@@ -180,11 +254,15 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    marginBottom: 4,
   },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 4,
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
   orderId: {
     fontSize: 14,
@@ -192,24 +270,88 @@ const styles = StyleSheet.create({
     color: Colors.charcoal,
   },
   amount: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: "bold",
     color: Colors.primary,
   },
-  cardBody: {
+  userSection: {
     marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  user: {
-    fontSize: 14,
-    color: Colors.text,
+  userName: {
+    fontSize: 16,
+    color: Colors.charcoal,
+    fontWeight: "600",
+    marginBottom: 8,
+  },
+  userInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     marginBottom: 4,
-    fontWeight: "500",
   },
-  detailsRow: {
+  userInfoText: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    flex: 1,
+  },
+  itemsSection: {
+    marginBottom: 12,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  itemsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 8,
+  },
+  itemsTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: Colors.charcoal,
+  },
+  itemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 4,
+    paddingLeft: 20,
+  },
+  itemName: {
+    fontSize: 12,
+    color: Colors.text,
+    flex: 1,
+  },
+  itemQty: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginHorizontal: 8,
+    minWidth: 30,
+  },
+  itemPrice: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.primary,
+    minWidth: 60,
+    textAlign: "right",
+  },
+  cardFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 4,
+  },
+  detailsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dateRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   date: {
     fontSize: 12,
@@ -217,26 +359,19 @@ const styles = StyleSheet.create({
   },
   modeBadge: {
     paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderRadius: 4,
   },
   codBadge: {
     backgroundColor: "#FEF3C7",
   },
-  upiBADGE: {
+  upiBadge: {
     backgroundColor: "#DBEAFE",
   },
   modeText: {
     fontSize: 10,
     fontWeight: "600",
     color: Colors.charcoal,
-  },
-  itemsCount: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  cardFooter: {
-    flexDirection: "row",
   },
   statusBadge: {
     flexDirection: "row",
@@ -251,5 +386,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     color: "#166534",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 40,
+    gap: 12,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: Colors.charcoal,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: Colors.textMuted,
   },
 })

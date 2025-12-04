@@ -8,16 +8,17 @@ import { Trash2, Plus, Minus } from "lucide-react-native"
 import { Button } from "@/components/ui/Button"
 import { useCart } from "@/context/CartContext"
 import { router } from "expo-router"
-
-const SHIPPING = 50
+import { useAuth } from "@/context/AuthContext"
+import { Input } from "@/components/ui/Input"
 
 export default function CartScreen() {
   const { items, total, removeFromCart, updateQuantity, clearCart } = useCart()
+  const { userData } = useAuth()
   const [refreshing, setRefreshing] = useState(false)
-  const [showReminderPicker, setShowReminderPicker] = useState(false)
   const [selectedReminder, setSelectedReminder] = useState<number>(0)
+  const [customDays, setCustomDays] = useState<string>("")
 
-  const finalTotal = total + SHIPPING
+  const finalTotal = total
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -29,9 +30,12 @@ export default function CartScreen() {
       Alert.alert("Error", "Cart is empty")
       return
     }
+
+    const reminderDays = selectedReminder === -1 ? Number.parseInt(customDays || "0") : selectedReminder
+
     router.push({
       pathname: "/user/billing",
-      params: { reminderDays: selectedReminder },
+      params: { reminderDays: reminderDays.toString() },
     } as any)
   }
 
@@ -114,7 +118,15 @@ export default function CartScreen() {
                 ))}
               </View>
               {selectedReminder === -1 && (
-                <Text style={styles.reminderHint}>Custom reminders will be set during checkout</Text>
+                <View>
+                  <Input
+                    label="Days"
+                    placeholder="Enter number of days"
+                    value={customDays}
+                    onChangeText={setCustomDays}
+                    keyboardType="number-pad"
+                  />
+                </View>
               )}
             </View>
 
@@ -122,10 +134,6 @@ export default function CartScreen() {
               <View style={styles.row}>
                 <Text style={styles.rowLabel}>Subtotal</Text>
                 <Text style={styles.rowValue}>₹{total.toFixed(2)}</Text>
-              </View>
-              <View style={styles.row}>
-                <Text style={styles.rowLabel}>Shipping</Text>
-                <Text style={styles.rowValue}>₹{SHIPPING.toFixed(2)}</Text>
               </View>
               <View style={[styles.row, styles.totalRow]}>
                 <Text style={styles.totalLabel}>Total</Text>
@@ -257,11 +265,6 @@ const styles = StyleSheet.create({
   },
   reminderButtonTextActive: {
     color: Colors.white,
-  },
-  reminderHint: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontStyle: "italic",
   },
   summary: {
     backgroundColor: Colors.white,

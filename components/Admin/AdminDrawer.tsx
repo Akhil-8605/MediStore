@@ -1,8 +1,11 @@
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert } from "react-native"
+"use client"
+
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from "react-native"
 import { router } from "expo-router"
-import { LayoutDashboard, Pill, Users, Bell, CreditCard, LogOut, X } from "lucide-react-native"
+import { LayoutDashboard, Pill, Users, CreditCard, LogOut, X, AlertCircle } from "lucide-react-native"
 import { Colors } from "@/constants/Colors"
 import { authService } from "@/services/authService"
+import { useEffect, useRef } from "react"
 
 interface AdminDrawerProps {
     visible: boolean
@@ -13,12 +16,46 @@ interface AdminDrawerProps {
 const MENU_ITEMS = [
     { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, route: "/admin/dashboard" },
     { id: "medicines", label: "Medicines", icon: Pill, route: "/admin/medicines" },
+    { id: "orders", label: "Orders", icon: LayoutDashboard, route: "/admin/orders" },
     { id: "users", label: "Users", icon: Users, route: "/admin/users" },
-    { id: "alerts", label: "Alerts", icon: Bell, route: "/admin/alerts" },
+    { id: "alerts", label: "Alerts", icon: AlertCircle, route: "/admin/alerts" },
     { id: "payments", label: "Payments", icon: CreditCard, route: "/admin/payments" },
 ]
 
 export default function AdminDrawer({ visible, onClose, activeRoute }: AdminDrawerProps) {
+    const slideAnim = useRef(new Animated.Value(1000)).current
+    const fadeAnim = useRef(new Animated.Value(10)).current
+
+    useEffect(() => {
+        if (visible) {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: 0,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: false,
+                }),
+            ]).start()
+        } else {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: 1000,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(fadeAnim, {
+                    toValue: 0,
+                    duration: 0,
+                    useNativeDriver: false,
+                }),
+            ]).start()
+        }
+    }, [visible, slideAnim, fadeAnim])
+
     const handleLogout = () => {
         Alert.alert("Logout", "Are you sure you want to logout?", [
             { text: "Cancel", onPress: () => { } },
@@ -46,43 +83,66 @@ export default function AdminDrawer({ visible, onClose, activeRoute }: AdminDraw
 
     return (
         <View style={styles.container}>
-            {/* Overlay */}
-            <TouchableOpacity style={styles.overlay} onPress={onClose} activeOpacity={1} />
+            <Animated.View
+                style={[
+                    styles.overlay,
+                    {
+                        opacity: fadeAnim,
+                    },
+                ]}
+            >
+                <TouchableOpacity style={StyleSheet.absoluteFillObject} onPress={onClose} activeOpacity={1} />
+            </Animated.View>
 
-            {/* Drawer */}
-            <View style={styles.drawer}>
+            <Animated.View
+                style={[
+                    styles.drawer,
+                    {
+                        transform: [{ translateX: slideAnim }],
+                    },
+                ]}
+            >
                 <View style={styles.header}>
-                    <View>
-                        <Text style={styles.headerTitle}>MediCare Admin</Text>
-                        <Text style={styles.headerSubtitle}>Management Panel</Text>
+                    <View style={styles.logoContainer}>
+                        <View style={styles.logoBadge}>
+                            <Text style={styles.logoText}>M</Text>
+                        </View>
+                        <View>
+                            <Text style={styles.headerTitle}>MediStore Admin</Text>
+                            <Text style={styles.headerSubtitle}>Management Hub</Text>
+                        </View>
                     </View>
-                    <TouchableOpacity onPress={onClose}>
+                    <TouchableOpacity onPress={onClose} style={styles.closeButton}>
                         <X size={24} color={Colors.charcoal} />
                     </TouchableOpacity>
                 </View>
 
                 <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-                    {MENU_ITEMS.map((item) => (
+                    {MENU_ITEMS.map((item, index) => (
                         <TouchableOpacity
                             key={item.id}
                             style={[styles.menuItem, activeRoute?.includes(item.id) && styles.menuItemActive]}
                             onPress={() => handleMenuPress(item.route)}
+                            activeOpacity={0.7}
                         >
-                            <item.icon size={20} color={activeRoute?.includes(item.id) ? Colors.primary : Colors.textMuted} />
+                            <View style={[styles.iconContainer, activeRoute?.includes(item.id) && styles.iconContainerActive]}>
+                                <item.icon size={20} color={activeRoute?.includes(item.id) ? Colors.white : Colors.primary} />
+                            </View>
                             <Text style={[styles.menuLabel, activeRoute?.includes(item.id) && styles.menuLabelActive]}>
                                 {item.label}
                             </Text>
+                            {activeRoute?.includes(item.id) && <View style={styles.activeIndicator} />}
                         </TouchableOpacity>
                     ))}
                 </ScrollView>
 
                 <View style={styles.footer}>
-                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
                         <LogOut size={20} color={Colors.error} />
                         <Text style={styles.logoutText}>Logout</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </Animated.View>
         </View>
     )
 }
@@ -102,25 +162,52 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.white,
         paddingTop: 16,
         flexDirection: "column",
+        shadowColor: "#000",
+        shadowOffset: { width: 2, height: 0 },
+        shadowOpacity: 0.25,
+        shadowRadius: 8,
+        elevation: 12,
     },
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        paddingHorizontal: 20,
-        paddingVertical: 16,
+        paddingHorizontal: 16,
+        paddingVertical: 20,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
+    logoContainer: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+        flex: 1,
+    },
+    logoBadge: {
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: Colors.primary,
+        alignItems: "center",
+        justifyContent: "center",
+    },
+    logoText: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: Colors.white,
+    },
     headerTitle: {
-        fontSize: 18,
+        fontSize: 16,
         fontWeight: "700",
         color: Colors.charcoal,
-        marginBottom: 4,
+        marginBottom: 2,
     },
     headerSubtitle: {
         fontSize: 12,
         color: Colors.textMuted,
+    },
+    closeButton: {
+        padding: 8,
     },
     content: {
         flex: 1,
@@ -129,25 +216,42 @@ const styles = StyleSheet.create({
     menuItem: {
         flexDirection: "row",
         alignItems: "center",
-        paddingHorizontal: 20,
-        paddingVertical: 12,
+        paddingHorizontal: 16,
+        paddingVertical: 14,
         gap: 12,
         marginVertical: 2,
+        marginHorizontal: 8,
+        borderRadius: 8,
     },
     menuItemActive: {
         backgroundColor: `${Colors.primary}15`,
-        borderLeftWidth: 4,
-        borderLeftColor: Colors.primary,
-        paddingLeft: 16,
+    },
+    iconContainer: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: "transparent",
+    },
+    iconContainerActive: {
+        backgroundColor: Colors.primary,
     },
     menuLabel: {
-        fontSize: 16,
+        fontSize: 15,
         color: Colors.text,
         fontWeight: "500",
+        flex: 1,
     },
     menuLabelActive: {
         color: Colors.primary,
         fontWeight: "700",
+    },
+    activeIndicator: {
+        width: 4,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: Colors.primary,
     },
     footer: {
         borderTopWidth: 1,
@@ -159,7 +263,7 @@ const styles = StyleSheet.create({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        paddingVertical: 10,
+        paddingVertical: 12,
         gap: 8,
         borderRadius: 8,
         backgroundColor: "#FEE2E2",

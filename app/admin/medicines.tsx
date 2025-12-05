@@ -272,7 +272,6 @@ export default function AdminMedicines() {
         />
       )}
 
-      {/* Filter Modal */}
       <Modal
         visible={filterModalVisible}
         transparent
@@ -334,7 +333,6 @@ export default function AdminMedicines() {
         </SafeAreaView>
       </Modal>
 
-      {/* Add/Edit Medicine Modal */}
       <Modal
         visible={modalVisible}
         transparent

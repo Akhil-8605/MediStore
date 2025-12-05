@@ -34,7 +34,7 @@ export default function CartScreen() {
     const reminderDays = selectedReminder === -1 ? Number.parseInt(customDays || "0") : selectedReminder
 
     router.push({
-      pathname: "/user/billing",
+      pathname: "/billing",
       params: { reminderDays: reminderDays.toString() },
     } as any)
   }

@@ -1,15 +1,15 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { View, Text, StyleSheet, ScrollView, Alert, ActivityIndicator } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "../../constants/Colors"
-import { useAuth } from "../../context/AuthContext"
-import { useLocalSearchParams, router } from "expo-router"
-import { Button } from "../../components/ui/Button"
-import ViewShot from "react-native-view-shot"
 import * as FileSystem from "expo-file-system"
+import { router, useLocalSearchParams } from "expo-router"
 import * as Sharing from "expo-sharing"
+import { useEffect, useRef, useState } from "react"
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, View } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import ViewShot from "react-native-view-shot"
+import { Button } from "../components/ui/Button"
+import { Colors } from "../constants/Colors"
+import { useAuth } from "../context/AuthContext"
 
 export default function ReceiptScreen() {
     const { orderId } = useLocalSearchParams()
@@ -85,14 +85,12 @@ export default function ReceiptScreen() {
 
                 <ViewShot ref={viewShotRef} options={{ format: "png", quality: 0.95 }} style={styles.receipt}>
                     <View style={styles.receiptContent}>
-                        {/* Logo */}
                         <View style={styles.receiptHeader}>
                             <Text style={styles.logoText}>💊</Text>
                             <Text style={styles.logoName}>MediStore</Text>
                             <Text style={styles.logoTagline}>Your Health, Delivered</Text>
                         </View>
 
-                        {/* Order Info */}
                         <View style={styles.infoSection}>
                             <Text style={styles.infoLabel}>Order ID</Text>
                             <Text style={styles.infoValue}>{orderData.orderId}</Text>
@@ -110,7 +108,6 @@ export default function ReceiptScreen() {
                             <Text style={styles.infoValue}>{orderData.deliveryAddress}</Text>
                         </View>
 
-                        {/* Items */}
                         <View style={styles.itemsSection}>
                             <Text style={styles.itemsTitle}>Order Items</Text>
                             {orderData.items &&
@@ -127,7 +124,6 @@ export default function ReceiptScreen() {
                                 ))}
                         </View>
 
-                        {/* Summary - No Shipping */}
                         <View style={styles.summarySection}>
                             <View style={[styles.summaryRow, styles.totalRow]}>
                                 <Text style={styles.totalLabel}>Total Amount</Text>
@@ -143,7 +139,6 @@ export default function ReceiptScreen() {
                             </View>
                         </View>
 
-                        {/* Footer */}
                         <View style={styles.receiptFooter}>
                             <Text style={styles.footerText}>Thank you for your purchase!</Text>
                             <Text style={styles.footerSubtext}>This is a computer-generated receipt.</Text>
@@ -151,7 +146,6 @@ export default function ReceiptScreen() {
                     </View>
                 </ViewShot>
 
-                {/* Actions */}
                 <View style={styles.actions}>
                     <Button
                         title="Download Receipt"

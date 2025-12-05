@@ -1,17 +1,17 @@
 "use client"
 
-import { Button } from "../../components/ui/Button"
-import { db } from "../../config/firebase"
-import { Colors } from "../../constants/Colors"
-import { useAuth } from "../../context/AuthContext"
-import { useCart } from "../../context/CartContext"
-import type { Order } from "../../services/firestoreService"
 import { router } from "expo-router"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { MapPin } from "lucide-react-native"
 import { useCallback, useEffect, useState } from "react"
 import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { Button } from "../components/ui/Button"
+import { db } from "../config/firebase"
+import { Colors } from "../constants/Colors"
+import { useAuth } from "../context/AuthContext"
+import { useCart } from "../context/CartContext"
+import type { Order } from "../services/firestoreService"
 
 export default function OrdersScreen() {
     const { userData, user } = useAuth()
@@ -227,7 +227,7 @@ export default function OrdersScreen() {
                                 style={styles.viewButton}
                                 onPress={() => {
                                     router.push({
-                                        pathname: "/user/receipt",
+                                        pathname: "/receipt",
                                         params: { orderId: item.orderId },
                                     })
                                 }}

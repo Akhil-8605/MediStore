@@ -216,7 +216,6 @@ export default function AdminDashboard() {
           </View>
         ) : (
           <>
-            {/* Stats Grid */}
             <View style={styles.statsGrid}>
               {STATS.map((stat, index) => (
                 <View key={index} style={styles.statCard}>
@@ -229,7 +228,6 @@ export default function AdminDashboard() {
               ))}
             </View>
 
-            {/* Low Stock Alerts */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <View style={styles.sectionTitleRow}>
@@ -263,7 +261,6 @@ export default function AdminDashboard() {
               )}
             </View>
 
-            {/* Recent Activity */}
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Text style={styles.sectionTitle}>Recent Activity</Text>

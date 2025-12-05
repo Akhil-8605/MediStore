@@ -1,17 +1,17 @@
 "use client"
 
-import { useState } from "react"
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Linking } from "react-native"
-import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "../../constants/Colors"
-import { useCart } from "../../context/CartContext"
-import { useAuth } from "../../context/AuthContext"
-import { Button } from "../../components/ui/Button"
+import { router, useLocalSearchParams, useRouter } from "expo-router"
 import { MapPin, Smartphone } from "lucide-react-native"
-import { firestoreService, type Order } from "../../services/firestoreService"
-import { receiptService } from "../../services/recieptService"
-import { router, useRouter, useLocalSearchParams } from "expo-router"
-import { orderService } from "../../services/orderService"
+import { useState } from "react"
+import { Alert, Linking, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native"
+import { SafeAreaView } from "react-native-safe-area-context"
+import { Button } from "../components/ui/Button"
+import { Colors } from "../constants/Colors"
+import { useAuth } from "../context/AuthContext"
+import { useCart } from "../context/CartContext"
+import { firestoreService, type Order } from "../services/firestoreService"
+import { orderService } from "../services/orderService"
+import { receiptService } from "../services/recieptService"
 
 export default function BillingScreen() {
     const { items, total, clearCart } = useCart()
@@ -34,38 +34,35 @@ export default function BillingScreen() {
             setLoading(true)
             setUpiChoice(app)
 
-            // Generate UPI string based on selected app
-            const upiId = "akhilesh-adam@ybl"
-            let deepLink = ""
+            const upiId = "akhilesh-adam@ybl" // must be valid VPA
+            const amountStr = Number(finalTotal).toFixed(2) // e.g. "150.00"
+            const payeeName = "MediStore"
+            const note = `Order ${orderId}`
 
-            switch (app) {
-                case "phonpe":
-                    deepLink = `phonepe://pay?to=${upiId}&amount=${finalTotal}&tr_id=${orderId}`
-                    break
-                case "googlepay":
-                    deepLink = `gpay://upi/pay?pa=${upiId}&am=${finalTotal}&tn=MediStore&tr=order_${orderId}`
-                    break
-                case "other":
-                    deepLink = `upi://pay?pa=${upiId}&am=${finalTotal}&tn=MediStore&tr=order_${orderId}`
-                    break
-            }
+            // standard UPI URI (this is what most UPI apps listen for)
+            const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(
+                payeeName,
+            )}&am=${encodeURIComponent(amountStr)}&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(
+                orderId,
+            )}&cu=INR`
 
-            const canOpen = await Linking.canOpenURL(deepLink)
-            if (canOpen) {
-                await Linking.openURL(deepLink)
-                // After user completes payment in app, show confirmation
+            // Optional: if you want to prefer a particular app you can try an app-specific scheme first
+            // but it's fine to use the generic upi://pay which will show installed UPI apps chooser.
+            try {
+                await Linking.openURL(upiUrl)
                 Alert.alert("Payment Initiated", "Complete payment in your UPI app and return here")
-                // Assume payment successful for now (in real app, use webhook)
+                // NOTE: you cannot reliably detect success here — use a webhook or server-side confirmation in production.
                 await completeOrderPayment()
-            } else {
+            } catch (openError) {
+                console.warn("openURL failed for UPI link:", openError)
                 Alert.alert(
-                    "Error",
-                    `${app === "phonpe" ? "PhonePe" : app === "googlepay" ? "Google Pay" : "UPI app"} is not installed`,
+                    "Unable to open UPI app",
+                    "Could not open UPI app. Please make sure a UPI app (PhonePe/GooglePay/etc.) is installed.",
                 )
             }
         } catch (error) {
-            Alert.alert("Error", "Failed to open UPI app")
-            console.error(error)
+            console.error("handleUPIApp error", error)
+            Alert.alert("Error", "Failed to start UPI payment")
         } finally {
             setLoading(false)
         }
@@ -132,14 +129,14 @@ export default function BillingScreen() {
                     text: "View Receipt",
                     onPress: () => {
                         router.push({
-                            pathname: "/user/receipt",
+                            pathname: "/receipt",
                             params: { orderId },
                         })
                     },
                 },
                 {
                     text: "View Orders",
-                    onPress: () => router.push("/user/orders"),
+                    onPress: () => router.push("/orders"),
                 },
             ])
         } catch (error: any) {
@@ -233,7 +230,6 @@ export default function BillingScreen() {
                     <Text style={styles.title}>Billing Details</Text>
                 </View>
 
-                {/* Order Summary - removed shipping row */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Order Summary</Text>
                     <View style={styles.summaryCard}>
@@ -251,7 +247,6 @@ export default function BillingScreen() {
                     </View>
                 </View>
 
-                {/* Delivery Address */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Delivery Address</Text>
                     <View style={styles.addressInput}>
@@ -267,7 +262,6 @@ export default function BillingScreen() {
                     </View>
                 </View>
 
-                {/* Payment Method */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Payment Method</Text>
 
@@ -296,7 +290,6 @@ export default function BillingScreen() {
                     </TouchableOpacity>
                 </View>
 
-                {/* Place Order Button */}
                 <Button
                     title={loading ? "Processing..." : "Place Order"}
                     onPress={handlePayment}
@@ -312,6 +305,7 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         backgroundColor: Colors.background,
+        padding: 20,
     },
     content: {
         padding: 20,
@@ -460,7 +454,6 @@ const styles = StyleSheet.create({
         marginBottom: 20,
     },
     upiContent: {
-        padding: 20,
         alignItems: "center",
     },
     amountCard: {

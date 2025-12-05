@@ -23,7 +23,7 @@ import { Button } from "../../components/ui/Button"
 import { passwordService } from "../../services/passwordServices"
 
 const MENU_ITEMS = [
-  { icon: Package, label: "My Orders", route: "/user/orders" },
+  { icon: Package, label: "My Orders", route: "/orders" },
   { icon: Bell, label: "Notifications", route: "/user/notifications" },
 ]
 
@@ -175,7 +175,6 @@ export default function ProfileScreen() {
           <Text style={styles.mobile}>{profileData?.mobile}</Text>
         </View>
 
-        {/* User Statistics */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{profileData?.orders?.length || 0}</Text>

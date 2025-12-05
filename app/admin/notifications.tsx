@@ -162,7 +162,6 @@ export default function AdminAlertsScreen() {
 
     return (
       <TouchableOpacity style={styles.card} onPress={() => handleOpenOrderDetail(item)} activeOpacity={0.7}>
-        {/* Header */}
         <View style={styles.cardHeader}>
           <View style={styles.orderInfo}>
             <Text style={styles.orderId}>#{item.orderId.substring(0, 10)}</Text>
@@ -180,7 +179,6 @@ export default function AdminAlertsScreen() {
           </View>
         </View>
 
-        {/* Order Details */}
         <View style={styles.orderDetails}>
           <View style={styles.detailRow}>
             <Package size={14} color={Colors.textMuted} />
@@ -192,13 +190,11 @@ export default function AdminAlertsScreen() {
           </View>
         </View>
 
-        {/* Amount */}
         <View style={styles.amountRow}>
           <Text style={styles.amountLabel}>Total Amount</Text>
           <Text style={styles.amountValue}>₹{item.totalAmount.toFixed(2)}</Text>
         </View>
 
-        {/* Action Button */}
         <TouchableOpacity style={styles.openButton} onPress={() => handleOpenOrderDetail(item)}>
           <Bell size={16} color={Colors.white} />
           <Text style={styles.openButtonText}>View & Send Reminder</Text>
@@ -229,7 +225,6 @@ export default function AdminAlertsScreen() {
         }
       />
 
-      {/* Order Detail Modal */}
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
@@ -243,7 +238,6 @@ export default function AdminAlertsScreen() {
           </View>
 
           <ScrollView contentContainerStyle={styles.modalContent}>
-            {/* User Information Card */}
             <View style={styles.infoCard}>
               <Text style={styles.infoCardTitle}>Customer Information</Text>
               <View style={styles.infoRow}>
@@ -275,7 +269,6 @@ export default function AdminAlertsScreen() {
               </View>
             </View>
 
-            {/* Order Items Card */}
             <View style={styles.infoCard}>
               <Text style={styles.infoCardTitle}>Order Items</Text>
               {selectedOrder?.items.map((item: any, idx: number) => (
@@ -294,7 +287,6 @@ export default function AdminAlertsScreen() {
               </View>
             </View>
 
-            {/* Notification Message */}
             <View style={styles.messageSection}>
               <Text style={styles.messageSectionTitle}>Notification Message</Text>
               <Text style={styles.messageHint}>This message will be sent to the user with a reorder button</Text>
@@ -309,7 +301,6 @@ export default function AdminAlertsScreen() {
               />
             </View>
 
-            {/* Send Button */}
             <TouchableOpacity
               style={[styles.sendButton, sendingNotification && styles.sendButtonDisabled]}
               onPress={handleSendReminder}

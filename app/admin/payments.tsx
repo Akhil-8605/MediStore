@@ -129,7 +129,6 @@ export default function AdminPayments() {
                 <Text style={styles.amount}>₹{item.totalAmount?.toFixed(2) || "0.00"}</Text>
               </View>
 
-              {/* User Info Section */}
               <View style={styles.userSection}>
                 <Text style={styles.userName}>{item.userName || "Unknown"}</Text>
                 <View style={styles.userInfoRow}>
@@ -148,7 +147,6 @@ export default function AdminPayments() {
                 </View>
               </View>
 
-              {/* Items Section */}
               <View style={styles.itemsSection}>
                 <View style={styles.itemsHeader}>
                   <Package size={14} color={Colors.charcoal} />

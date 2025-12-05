@@ -219,7 +219,6 @@ export default function NotificationsScreen() {
                 onPress={() => handleMarkAsRead(item)}
                 activeOpacity={0.7}
             >
-                {/* Header Row */}
                 <View style={styles.cardHeader}>
                     <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
                         <IconComponent size={20} color={iconColor} />
@@ -233,12 +232,10 @@ export default function NotificationsScreen() {
                     </View>
                 </View>
 
-                {/* Message */}
                 <View style={styles.messageContainer}>
                     <Text style={styles.message}>{item.message}</Text>
                 </View>
 
-                {/* Order ID if present */}
                 {item.orderId && (
                     <View style={styles.orderIdContainer}>
                         <Package size={14} color={Colors.primary} />
@@ -246,7 +243,6 @@ export default function NotificationsScreen() {
                     </View>
                 )}
 
-                {/* Actions */}
                 <View style={styles.actionsContainer}>
                     {item.hasReorderButton && (
                         <TouchableOpacity style={styles.reorderButton} onPress={() => handleReorderNow(item)}>

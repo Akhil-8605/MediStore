@@ -245,7 +245,6 @@ export default function AdminOrdersScreen() {
                 />
             )}
 
-            {/* Status Update Modal */}
             <Modal
                 visible={showStatusModal}
                 transparent
@@ -260,7 +259,6 @@ export default function AdminOrdersScreen() {
 
                         {selectedOrder && (
                             <View style={styles.selectedOrderInfo}>
-                                {/* Order ID */}
                                 <View style={styles.infoSection}>
                                     <View style={styles.infoIconRow}>
                                         <Package size={16} color={Colors.primary} />
@@ -276,7 +274,6 @@ export default function AdminOrdersScreen() {
                                     </View>
                                 </View>
 
-                                {/* Customer Info */}
                                 <View style={styles.infoSection}>
                                     <View style={styles.infoIconRow}>
                                         <User size={16} color={Colors.primary} />
@@ -298,7 +295,6 @@ export default function AdminOrdersScreen() {
                                     )}
                                 </View>
 
-                                {/* Payment & Address */}
                                 <View style={styles.infoSection}>
                                     <View style={styles.infoIconRow}>
                                         <CreditCard size={16} color={Colors.primary} />
@@ -322,7 +318,6 @@ export default function AdminOrdersScreen() {
                                     </View>
                                 </View>
 
-                                {/* Address */}
                                 <View style={styles.infoSection}>
                                     <View style={styles.infoIconRow}>
                                         <MapPin size={16} color={Colors.primary} />
@@ -331,7 +326,6 @@ export default function AdminOrdersScreen() {
                                     <Text style={styles.addressText}>{selectedOrder.deliveryAddress}</Text>
                                 </View>
 
-                                {/* Items */}
                                 <View style={styles.itemsContainer}>
                                     <Text style={styles.itemsTitle}>Items ({selectedOrder.items.length})</Text>
                                     {selectedOrder.items.map((item, idx) => (

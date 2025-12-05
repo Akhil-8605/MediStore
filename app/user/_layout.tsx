@@ -6,12 +6,18 @@ import { Colors } from "../../constants/Colors"
 import { useCart } from "../../context/CartContext"
 import { useAuth } from "../../context/AuthContext"
 import { View, Text } from "react-native"
+import { useEffect } from "react"
 
 export default function TabLayout() {
   const { items } = useCart()
   const { userData } = useAuth()
 
-  const unreadNotifications = userData?.notifications?.filter((n) => !n.read).length || 0
+  var unreadNotifications = userData?.notifications?.filter((n) => !n.read).length || 0;
+
+  useEffect(() => {
+    unreadNotifications = userData?.notifications?.filter((n) => !n.read).length || 0
+  }, [userData])
+
   const cartCount = items.length
 
   return (
@@ -44,6 +50,34 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="notification"
+        options={{
+          title: "Notifications",
+          tabBarIcon: ({ color, size }) => (
+            <View>
+              <Bell size={size} color={color} />
+              {unreadNotifications > 0 && (
+                <View
+                  style={{
+                    position: "absolute",
+                    right: -8,
+                    top: -8,
+                    backgroundColor: Colors.error,
+                    borderRadius: 10,
+                    width: 20,
+                    height: 20,
+                    justifyContent: "center",
+                    alignItems: "center",
+                  }}
+                >
+                  <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>{unreadNotifications}</Text>
+                </View>
+              )}
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="cart"
         options={{
           title: "Cart",
@@ -65,34 +99,6 @@ export default function TabLayout() {
                   }}
                 >
                   <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>{cartCount}</Text>
-                </View>
-              )}
-            </View>
-          ),
-        }}
-      />
-      <Tabs.Screen
-        name="notifications"
-        options={{
-          title: "Notifications",
-          tabBarIcon: ({ color, size }) => (
-            <View>
-              <Bell size={size} color={color} />
-              {unreadNotifications > 0 && (
-                <View
-                  style={{
-                    position: "absolute",
-                    right: -8,
-                    top: -8,
-                    backgroundColor: Colors.error,
-                    borderRadius: 10,
-                    width: 20,
-                    height: 20,
-                    justifyContent: "center",
-                    alignItems: "center",
-                  }}
-                >
-                  <Text style={{ color: "white", fontSize: 10, fontWeight: "bold" }}>{unreadNotifications}</Text>
                 </View>
               )}
             </View>

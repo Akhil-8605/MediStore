@@ -15,7 +15,7 @@ import {
     ActivityIndicator,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { Bell, X, Send, Package, Mail, Phone, MapPin, Calendar, ShoppingCart } from "lucide-react-native"
 import { getDocs, collection, updateDoc, doc, arrayUnion } from "firebase/firestore"
 import { db } from "../../config/firebase"

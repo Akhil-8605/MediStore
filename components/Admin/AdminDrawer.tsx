@@ -3,8 +3,8 @@
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from "react-native"
 import { router } from "expo-router"
 import { LayoutDashboard, Pill, Users, CreditCard, LogOut, X, AlertCircle } from "lucide-react-native"
-import { Colors } from "@/constants/Colors"
-import { authService } from "@/services/authService"
+import { Colors } from "../../constants/Colors"
+import { authService } from "../../services/authService"
 import { useEffect, useRef } from "react"
 
 interface AdminDrawerProps {

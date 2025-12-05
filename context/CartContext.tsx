@@ -1,6 +1,6 @@
 "use client"
 
-import { cartService, type CartItem } from "@/services/cartService"
+import { cartService, type CartItem } from "../services/cartService"
 import type React from "react"
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
 

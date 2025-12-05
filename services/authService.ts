@@ -4,7 +4,7 @@ import {
     signOut,
     sendPasswordResetEmail,
 } from "firebase/auth"
-import { auth, db } from "@/config/firebase"
+import { auth, db } from "../config/firebase"
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore"
 
 export interface UserData {

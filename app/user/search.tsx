@@ -12,10 +12,10 @@ import {
   RefreshControl,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { Search as SearchIcon } from "lucide-react-native"
-import { firestoreService, type Medicine } from "@/services/firestoreService"
-import { useCart } from "@/context/CartContext"
+import { firestoreService, type Medicine } from "../../services/firestoreService"
+import { useCart } from "../../context/CartContext"
 
 const CATEGORIES = ["All", "Antibiotics", "Heart", "Diabetes", "Vitamins", "Gastrointestinal"]
 

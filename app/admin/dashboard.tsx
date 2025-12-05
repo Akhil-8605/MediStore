@@ -1,14 +1,14 @@
 "use client"
 
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { router } from "expo-router"
 import { DollarSign, ShoppingBag, Users, Pill, Clock, AlertTriangle } from "lucide-react-native"
 import { useEffect, useState, useCallback } from "react"
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "../../context/AuthContext"
 import { collection, getDocs } from "firebase/firestore"
-import { db } from "@/config/firebase"
+import { db } from "../../config/firebase"
 
 interface DashboardStats {
   totalRevenue: number

@@ -1,8 +1,8 @@
 "use client"
 
-import { Button } from "@/components/ui/Button"
-import { Colors } from "@/constants/Colors"
-import { orderManagementService, type OrderStatus } from "@/services/orderManagementService"
+import { Button } from "../../components/ui/Button"
+import { Colors } from "../../constants/Colors"
+import { orderManagementService, type OrderStatus } from "../../services/orderManagementService"
 import { CheckCircle2, Clock, CreditCard, MapPin, Package, User, XCircle } from "lucide-react-native"
 import { useCallback, useEffect, useState } from "react"
 import {

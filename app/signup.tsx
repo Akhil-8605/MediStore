@@ -4,10 +4,10 @@ import { useState } from "react"
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from "react-native"
 import { router } from "expo-router"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Input } from "@/components/ui/Input"
-import { Button } from "@/components/ui/Button"
-import { Colors } from "@/constants/Colors"
-import { useAuth } from "@/context/AuthContext"
+import { Input } from "../components/ui/Input"
+import { Button } from "../components/ui/Button"
+import { Colors } from "../constants/Colors"
+import { useAuth } from "../context/AuthContext"
 
 export default function SignupScreen() {
   const [formData, setFormData] = useState({

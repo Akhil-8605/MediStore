@@ -1,5 +1,5 @@
 import { doc, updateDoc, arrayUnion, Timestamp } from "firebase/firestore"
-import { db } from "@/config/firebase"
+import { db } from "../config/firebase"
 
 export interface CustomNotification {
     userId: string

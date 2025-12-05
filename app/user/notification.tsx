@@ -1,9 +1,9 @@
 "use client"
 
-import { db } from "@/config/firebase"
-import { Colors } from "@/constants/Colors"
-import { useAuth } from "@/context/AuthContext"
-import { useCart } from "@/context/CartContext"
+import { db } from "../../config/firebase"
+import { Colors } from "../../constants/Colors"
+import { useAuth } from "../../context/AuthContext"
+import { useCart } from "../../context/CartContext"
 import { router } from "expo-router"
 import { arrayRemove, doc, getDoc, updateDoc } from "firebase/firestore"
 import { AlertCircle, Bell, CheckCircle, ChevronRight, Clock, Package, ShoppingCart, Trash2 } from "lucide-react-native"

@@ -1,4 +1,4 @@
-import { db } from "@/config/firebase"
+import { db } from "../config/firebase"
 import { arrayUnion, doc, getDoc, Timestamp, updateDoc } from "firebase/firestore"
 import { addPaymentRecord, updateMedicineStock } from "./adminService"
 

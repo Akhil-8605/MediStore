@@ -1,5 +1,5 @@
 import { collection, doc, updateDoc, getDocs, getDoc, arrayUnion, Timestamp } from "firebase/firestore"
-import { db } from "@/config/firebase"
+import { db } from "../config/firebase"
 
 export interface UserDetail {
     id: string

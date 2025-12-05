@@ -2,8 +2,8 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
-import { auth } from "@/config/firebase"
-import { authService, type UserData } from "@/services/authService"
+import { auth } from "../config/firebase"
+import { authService, type UserData } from "../services/authService"
 import { onAuthStateChanged, type User } from "firebase/auth"
 
 interface AuthContextType {

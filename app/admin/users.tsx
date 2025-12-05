@@ -1,7 +1,7 @@
 "use client"
 
-import { db } from "@/config/firebase"
-import { Colors } from "@/constants/Colors"
+import { db } from "../../config/firebase"
+import { Colors } from "../../constants/Colors"
 import { arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, Timestamp, updateDoc } from "firebase/firestore"
 import { Mail, Phone, Phone as PhoneIcon, RefreshCw, Send, X } from "lucide-react-native"
 import { useCallback, useEffect, useState } from "react"

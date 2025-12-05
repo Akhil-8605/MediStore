@@ -1,8 +1,8 @@
 "use client"
 
-import { db } from "@/config/firebase"
-import { Colors } from "@/constants/Colors"
-import { useAuth } from "@/context/AuthContext"
+import { db } from "../../config/firebase"
+import { Colors } from "../../constants/Colors"
+import { useAuth } from "../../context/AuthContext"
 import { router } from "expo-router"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { Bell, ChevronRight, HelpCircle, Lock, LogOut, Package, Settings, Edit2 } from "lucide-react-native"
@@ -19,8 +19,8 @@ import {
   Alert,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Button } from "@/components/ui/Button"
-import { passwordService } from "@/services/passwordServices"
+import { Button } from "../../components/ui/Button"
+import { passwordService } from "../../services/passwordServices"
 
 const MENU_ITEMS = [
   { icon: Package, label: "My Orders", route: "/user/orders" },

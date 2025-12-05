@@ -3,15 +3,15 @@
 import { useState } from "react"
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Linking } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "@/constants/Colors"
-import { useCart } from "@/context/CartContext"
-import { useAuth } from "@/context/AuthContext"
-import { Button } from "@/components/ui/Button"
+import { Colors } from "../../constants/Colors"
+import { useCart } from "../../context/CartContext"
+import { useAuth } from "../../context/AuthContext"
+import { Button } from "../../components/ui/Button"
 import { MapPin, Smartphone } from "lucide-react-native"
-import { firestoreService, type Order } from "@/services/firestoreService"
-import { receiptService } from "@/services/recieptService"
+import { firestoreService, type Order } from "../../services/firestoreService"
+import { receiptService } from "../../services/recieptService"
 import { router, useRouter, useLocalSearchParams } from "expo-router"
-import { orderService } from "@/services/orderService"
+import { orderService } from "../../services/orderService"
 
 export default function BillingScreen() {
     const { items, total, clearCart } = useCart()

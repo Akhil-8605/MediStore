@@ -15,10 +15,10 @@ import {
   RefreshControl,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { Search, Plus, Edit2, Trash2, Filter, X } from "lucide-react-native"
 import { collection, getDocs, addDoc, updateDoc, deleteDoc, doc, Timestamp } from "firebase/firestore"
-import { db } from "@/config/firebase"
+import { db } from "../../config/firebase"
 
 interface Medicine {
   id?: string

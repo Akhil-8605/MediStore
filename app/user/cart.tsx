@@ -3,13 +3,13 @@
 import { useState } from "react"
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { Trash2, Plus, Minus } from "lucide-react-native"
-import { Button } from "@/components/ui/Button"
-import { useCart } from "@/context/CartContext"
+import { Button } from "../../components/ui/Button"
+import { useCart } from "../../context/CartContext"
 import { router } from "expo-router"
-import { useAuth } from "@/context/AuthContext"
-import { Input } from "@/components/ui/Input"
+import { useAuth } from "../../context/AuthContext"
+import { Input } from "../../components/ui/Input"
 
 export default function CartScreen() {
   const { items, total, removeFromCart, updateQuantity, clearCart } = useCart()

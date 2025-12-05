@@ -13,7 +13,7 @@ import {
     type Medicine,
     type DashboardStats,
     type RecentActivity,
-} from "@/services/adminService"
+} from "../services/adminService"
 
 interface AdminContextType {
     stats: DashboardStats | null

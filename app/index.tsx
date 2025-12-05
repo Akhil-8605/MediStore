@@ -1,10 +1,10 @@
-import { Button } from '@/components/ui/Button';
-import { Colors } from '@/constants/Colors';
+import { Button } from '../components/ui/Button';
+import { Colors } from '../constants/Colors';
 import { router } from 'expo-router';
 import React from 'react';
 import { Dimensions, StyleSheet, Text, View, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Logo from "@/assets/images/favicon.png";
+import Logo from "../assets/images/favicon.png";
 
 const { width } = Dimensions.get('window');
 

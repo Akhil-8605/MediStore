@@ -1,14 +1,13 @@
 "use client"
 
-import { useAuth } from "@/context/AuthContext"
+import { useAuth } from "../context/AuthContext"
 import { useEffect, useState } from "react"
 import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native"
-import { Colors } from "@/constants/Colors"
-import { Button } from "@/components/ui/Button"
-import { Input } from "@/components/ui/Input"
+import { Colors } from "../constants/Colors"
+import { Button } from "../components/ui/Button"
+import { Input } from "../components/ui/Input"
 import { useRouter } from "expo-router"
-import { authService } from "@/services/authService"
-import Logo from "@/assets/images/favicon.png";
+import { authService } from "../services/authService"
 
 export default function LoginScreen() {
   const [activeTab, setActiveTab] = useState<"user" | "admin">("user")

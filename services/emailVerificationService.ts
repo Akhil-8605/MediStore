@@ -1,4 +1,4 @@
-import { db } from "@/config/firebase"
+import { db } from "../config/firebase"
 import { addDoc, collection, deleteDoc, getDocs, query, where } from "firebase/firestore"
 
 export interface VerificationCode {

@@ -1,14 +1,14 @@
 "use client"
 
-import { Colors } from "@/constants/Colors"
+import { Colors } from "../../constants/Colors"
 import { router } from "expo-router"
 import { ArrowRight, Search } from "lucide-react-native"
 import { useState, useEffect, useCallback } from "react"
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
-import { useAuth } from "@/context/AuthContext"
-import { firestoreService, type Medicine } from "@/services/firestoreService"
-import { useCart } from "@/context/CartContext"
+import { useAuth } from "../../context/AuthContext"
+import { firestoreService, type Medicine } from "../../services/firestoreService"
+import { useCart } from "../../context/CartContext"
 
 export default function HomeScreen() {
   const { userData } = useAuth()

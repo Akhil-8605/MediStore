@@ -1,4 +1,4 @@
-import { db } from "@/config/firebase"
+import { db } from "../config/firebase"
 import { collection, getDocs, doc, updateDoc, arrayUnion, getDoc } from "firebase/firestore"
 
 export interface Medicine {

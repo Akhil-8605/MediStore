@@ -12,6 +12,7 @@ import { useCart } from "../context/CartContext"
 import { firestoreService, type Order } from "../services/firestoreService"
 import { orderService } from "../services/orderService"
 import { receiptService } from "../services/recieptService"
+import { notifyUserOrderPlaced, notifyAdminNewOrder } from "../services/pushNotificationService"
 
 export default function BillingScreen() {
     const { items, total, clearCart } = useCart()
@@ -34,24 +35,18 @@ export default function BillingScreen() {
             setLoading(true)
             setUpiChoice(app)
 
-            const upiId = "akhilesh-adam@ybl" // must be valid VPA
-            const amountStr = Number(finalTotal).toFixed(2) // e.g. "150.00"
+            const upiId = "akhilesh-adam@ybl"
+            const amountStr = Number(finalTotal).toFixed(2)
             const payeeName = "MediStore"
             const note = `Order ${orderId}`
 
-            // standard UPI URI (this is what most UPI apps listen for)
             const upiUrl = `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${encodeURIComponent(
                 payeeName,
-            )}&am=${encodeURIComponent(amountStr)}&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(
-                orderId,
-            )}&cu=INR`
+            )}&am=${encodeURIComponent(amountStr)}&tn=${encodeURIComponent(note)}&tr=${encodeURIComponent(orderId)}&cu=INR`
 
-            // Optional: if you want to prefer a particular app you can try an app-specific scheme first
-            // but it's fine to use the generic upi://pay which will show installed UPI apps chooser.
             try {
                 await Linking.openURL(upiUrl)
                 Alert.alert("Payment Initiated", "Complete payment in your UPI app and return here")
-                // NOTE: you cannot reliably detect success here — use a webhook or server-side confirmation in production.
                 await completeOrderPayment()
             } catch (openError) {
                 console.warn("openURL failed for UPI link:", openError)
@@ -109,15 +104,24 @@ export default function BillingScreen() {
             if (user) {
                 await firestoreService.addOrder(user.uid, order)
 
-                await orderService.completeOrder(user.uid, items, finalTotal, paymentMethod, reminderDays)
+                // Process payment record, stock updates, and reminders
+                await orderService.processOrderSideEffects(user.uid, orderId, items, finalTotal, paymentMethod, reminderDays)
 
-                // Add notification
+                // Add in-app notification
                 await firestoreService.addNotification(user.uid, {
                     id: orderId,
                     title: "Order Placed",
                     message: `Your order ${orderId} has been placed successfully`,
                     timestamp: new Date().toISOString(),
                     read: false,
+                })
+
+                await notifyUserOrderPlaced(user.uid, orderId, finalTotal)
+
+                await notifyAdminNewOrder({
+                    orderId,
+                    userName: userData?.name || "Customer",
+                    total: finalTotal,
                 })
             }
 
@@ -163,7 +167,6 @@ export default function BillingScreen() {
             if (paymentMethod === "COD") {
                 await completeOrderPayment()
             } else {
-                // For UPI, show UPI app options
                 setShowUPIOptions(true)
             }
         } catch (error: any) {

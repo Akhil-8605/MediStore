@@ -2,13 +2,14 @@
 
 import { Colors } from "../../constants/Colors"
 import { router } from "expo-router"
-import { DollarSign, ShoppingBag, Users, Pill, Clock, AlertTriangle } from "lucide-react-native"
+import { DollarSign, ShoppingBag, Users, Pill, Clock, AlertTriangle, Bell } from "lucide-react-native"
 import { useEffect, useState, useCallback } from "react"
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View, ActivityIndicator, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { useAuth } from "../../context/AuthContext"
 import { collection, getDocs } from "firebase/firestore"
 import { db } from "../../config/firebase"
+import { authService } from "../../services/authService"
 
 interface DashboardStats {
   totalRevenue: number
@@ -41,6 +42,7 @@ export default function AdminDashboard() {
   const [recentActivity, setRecentActivity] = useState<RecentActivity[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -50,7 +52,7 @@ export default function AdminDashboard() {
       let totalOrders = 0
       const activities: RecentActivity[] = []
       const startOfDay = new Date()
-      startOfDay.setDate(startOfDay.getDate() - 7) // Last 7 days
+      startOfDay.setDate(startOfDay.getDate() - 7)
       startOfDay.setHours(0, 0, 0, 0)
 
       usersSnapshot.forEach((userDoc) => {
@@ -59,7 +61,6 @@ export default function AdminDashboard() {
         const orders = userData.orders || []
         totalOrders += orders.length
 
-        // Collect recent activities
         orders.forEach((order: any) => {
           const orderDate = order.createdAt?.toDate?.() || new Date(order.createdAt)
           if (orderDate > startOfDay) {
@@ -109,14 +110,19 @@ export default function AdminDashboard() {
         }
       })
 
-      // Sort activities by timestamp (newest first)
+      const notificationsSnapshot = await getDocs(collection(db, "AdminNotifications"))
+      let unreadCount = 0
+      notificationsSnapshot.forEach((doc) => {
+        if (!doc.data().read) unreadCount++
+      })
+      setUnreadNotifications(unreadCount)
+
       activities.sort((a, b) => {
         const dateA = a.timestamp?.toDate?.() || new Date(a.timestamp)
         const dateB = b.timestamp?.toDate?.() || new Date(b.timestamp)
         return dateB.getTime() - dateA.getTime()
       })
 
-      // Sort low stock by quantity (lowest first)
       lowStock.sort((a, b) => a.totalQuantity - b.totalQuantity)
 
       setStats({
@@ -143,6 +149,12 @@ export default function AdminDashboard() {
   const onRefresh = () => {
     setRefreshing(true)
     fetchDashboardData()
+  }
+
+  const handleLogout = async () => {
+    await authService.adminLogout()
+    logout()
+    router.replace("/login")
   }
 
   const formatTime = (timestamp: any) => {
@@ -199,15 +211,21 @@ export default function AdminDashboard() {
             <Text style={styles.title}>Dashboard</Text>
             <Text style={styles.subtitle}>Overview of your store performance</Text>
           </View>
-          <TouchableOpacity
-            style={styles.logoutButton}
-            onPress={() => {
-              logout()
-              router.replace("/login")
-            }}
-          >
-            <Text style={styles.logoutText}>Logout</Text>
-          </TouchableOpacity>
+          <View style={styles.headerActions}>
+            <TouchableOpacity style={styles.notificationButton} onPress={() => router.push("/admin/notifications")}>
+              <Bell size={20} color={Colors.charcoal} />
+              {unreadNotifications > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadNotifications > 9 ? "9+" : unreadNotifications}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+              <Text style={styles.logoutText}>Logout</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {loading ? (
@@ -323,6 +341,36 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 14,
     color: Colors.textMuted,
+  },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  notificationButton: {
+    position: "relative",
+    padding: 8,
+    backgroundColor: Colors.white,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  notificationBadge: {
+    position: "absolute",
+    top: -6,
+    right: -6,
+    backgroundColor: Colors.error,
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: "bold",
   },
   logoutButton: {
     paddingVertical: 6,

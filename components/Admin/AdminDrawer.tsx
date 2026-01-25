@@ -2,7 +2,7 @@
 
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Alert, Animated } from "react-native"
 import { router } from "expo-router"
-import { LayoutDashboard, Pill, Users, CreditCard, LogOut, X, AlertCircle } from "lucide-react-native"
+import { LayoutDashboard, Pill, Users, CreditCard, LogOut, X, AlertCircle, Bell } from "lucide-react-native"
 import { Colors } from "../../constants/Colors"
 import { authService } from "../../services/authService"
 import { useEffect, useRef } from "react"
@@ -18,6 +18,7 @@ const MENU_ITEMS = [
     { id: "medicines", label: "Medicines", icon: Pill, route: "/admin/medicines" },
     { id: "orders", label: "Orders", icon: LayoutDashboard, route: "/admin/orders" },
     { id: "users", label: "Users", icon: Users, route: "/admin/users" },
+    { id: "notifications", label: "Notifications", icon: Bell, route: "/admin/notifications" },
     { id: "alerts", label: "Alerts", icon: AlertCircle, route: "/admin/alerts" },
     { id: "payments", label: "Payments", icon: CreditCard, route: "/admin/payments" },
 ]
@@ -63,6 +64,7 @@ export default function AdminDrawer({ visible, onClose, activeRoute }: AdminDraw
                 text: "Logout",
                 onPress: async () => {
                     try {
+                        await authService.adminLogout()
                         await authService.logout()
                         router.replace("/login")
                         onClose()

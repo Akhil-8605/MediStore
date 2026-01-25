@@ -19,14 +19,15 @@ export default function ReceiptScreen() {
     const viewShotRef = useRef<any>(null)
 
     useEffect(() => {
-        if (userData && orderId) {
-            const order = userData.orders?.find((o: any) => o.orderId === orderId)
-            if (order) {
-                setOrderData(order)
-            }
-            setLoading(false)
-        }
-    }, [userData, orderId])
+        if (!userData) return;
+        if (!orderId) return;
+        const normalizedOrderId = String(orderId);
+        const order = userData.orders?.find(
+            (o: any) => String(o.orderId) === normalizedOrderId
+        );
+        setOrderData(order || null);
+        setLoading(false);
+    }, [userData, orderId]);
 
     const handleDownloadReceipt = async () => {
         try {
@@ -65,7 +66,7 @@ export default function ReceiptScreen() {
         }
     }
 
-    if (loading || !orderData) {
+    if (loading) {
         return (
             <SafeAreaView style={styles.container}>
                 <View style={styles.loadingContainer}>
@@ -74,6 +75,24 @@ export default function ReceiptScreen() {
                 </View>
             </SafeAreaView>
         )
+    }
+
+    if (!orderData) {
+        return (
+            <SafeAreaView style={styles.container}>
+                <View style={styles.loadingContainer}>
+                    <Text style={{ fontSize: 16, color: Colors.primary, marginBottom: 20 }}>
+                        No receipt found for this order.
+                    </Text>
+
+                    <Button
+                        title="Back to Home"
+                        onPress={() => router.replace("/user/home")}
+                        style={{ width: 180 }}
+                    />
+                </View>
+            </SafeAreaView>
+        );
     }
 
     return (

@@ -6,10 +6,31 @@ import { useAuth } from "../../context/AuthContext"
 import { useCart } from "../../context/CartContext"
 import { router } from "expo-router"
 import { arrayRemove, doc, getDoc, updateDoc } from "firebase/firestore"
-import { AlertCircle, Bell, CheckCircle, ChevronRight, Clock, Package, ShoppingCart, Trash2 } from "lucide-react-native"
+import {
+    AlertCircle,
+    Bell,
+    BellRing,
+    CheckCircle,
+    ChevronRight,
+    Clock,
+    Package,
+    ShoppingCart,
+    X,
+} from "lucide-react-native"
 import { useCallback, useEffect, useState } from "react"
-import { Alert, FlatList, RefreshControl, StyleSheet, Text, TouchableOpacity, View } from "react-native"
+import {
+    Alert,
+    FlatList,
+    RefreshControl,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+    Animated,
+    Dimensions,
+} from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { pushNotificationService } from "../../services/pushNotificationService"
 
 interface Notification {
     id: string
@@ -22,6 +43,8 @@ interface Notification {
     hasReorderButton?: boolean
     items?: any[]
 }
+
+const { width } = Dimensions.get("window")
 
 export default function NotificationsScreen() {
     const { user } = useAuth()
@@ -62,7 +85,7 @@ export default function NotificationsScreen() {
                 year: "numeric",
             })
         } catch (error) {
-            console.error("[v0] Date formatting error:", error)
+            console.error("Date formatting error:", error)
             return "Invalid date"
         }
     }
@@ -78,6 +101,10 @@ export default function NotificationsScreen() {
                 setNotifications(
                     notifications.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
                 )
+
+                // Update badge count
+                const unreadCount = notifications.filter((n: Notification) => !n.read).length
+                pushNotificationService.setBadgeCount(unreadCount)
             }
         } catch (error) {
             console.error("Error fetching notifications:", error)
@@ -161,6 +188,24 @@ export default function NotificationsScreen() {
         }
     }
 
+    const handleMarkAllAsRead = async () => {
+        if (!user) return
+
+        try {
+            const userDoc = await getDoc(doc(db, "AllUsers", user.uid))
+            if (userDoc.exists()) {
+                const currentNotifications = userDoc.data().notifications || []
+                const updatedNotifications = currentNotifications.map((n: Notification) => ({ ...n, read: true }))
+                await updateDoc(doc(db, "AllUsers", user.uid), {
+                    notifications: updatedNotifications,
+                })
+                fetchNotifications()
+            }
+        } catch (error) {
+            console.error("Error marking all as read:", error)
+        }
+    }
+
     const getNotificationIcon = (type?: string) => {
         switch (type) {
             case "order_status":
@@ -176,116 +221,147 @@ export default function NotificationsScreen() {
         }
     }
 
-    const getIconBgColor = (type?: string, read?: boolean) => {
-        if (read) return "#F3F4F6"
+    const getIconColors = (type?: string, read?: boolean) => {
+        if (read) {
+            return { bg: "#F3F4F6", icon: Colors.textMuted }
+        }
+
         switch (type) {
             case "order_status":
-                return "#DBEAFE"
+                return { bg: Colors.logoback, icon: Colors.primary }
             case "reminder":
-                return "#FEF3C7"
+                return { bg: "#FEF3C7", icon: "#D97706" }
             case "success":
-                return "#DCFCE7"
+                return { bg: "#DCFCE7", icon: "#059669" }
             case "alert":
-                return "#FEE2E2"
+                return { bg: "#FEE2E2", icon: "#DC2626" }
             default:
-                return "#EDE9FE"
+                return { bg: Colors.logoback, icon: Colors.primary }
         }
     }
 
-    const getIconColor = (type?: string, read?: boolean) => {
-        if (read) return Colors.textMuted
-        switch (type) {
-            case "order_status":
-                return "#2563EB"
-            case "reminder":
-                return "#D97706"
-            case "success":
-                return "#059669"
-            case "alert":
-                return "#DC2626"
-            default:
-                return "#7C3AED"
-        }
-    }
+    const unreadCount = notifications.filter((n) => !n.read).length
 
-    const renderNotificationCard = ({ item }: { item: Notification }) => {
+    const renderNotificationCard = ({ item, index }: { item: Notification; index: number }) => {
         const IconComponent = getNotificationIcon(item.type)
-        const iconBgColor = getIconBgColor(item.type, item.read)
-        const iconColor = getIconColor(item.type, item.read)
+        const colors = getIconColors(item.type, item.read)
 
         return (
-            <TouchableOpacity
-                style={[styles.card, !item.read && styles.unreadCard]}
-                onPress={() => handleMarkAsRead(item)}
-                activeOpacity={0.7}
-            >
-                <View style={styles.cardHeader}>
-                    <View style={[styles.iconContainer, { backgroundColor: iconBgColor }]}>
-                        <IconComponent size={20} color={iconColor} />
-                    </View>
-                    <View style={styles.headerContent}>
-                        <View style={styles.titleRow}>
-                            <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]}>{item.title}</Text>
-                            {!item.read && <View style={styles.unreadDot} />}
+            <Animated.View>
+                <TouchableOpacity
+                    style={[styles.card, !item.read && styles.unreadCard]}
+                    onPress={() => handleMarkAsRead(item)}
+                    activeOpacity={0.7}
+                >
+                    {/* Notification Header */}
+                    <View style={styles.cardHeader}>
+                        <View style={[styles.iconContainer, { backgroundColor: colors.bg }]}>
+                            <IconComponent size={22} color={colors.icon} />
                         </View>
-                        <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
-                    </View>
-                </View>
-
-                <View style={styles.messageContainer}>
-                    <Text style={styles.message}>{item.message}</Text>
-                </View>
-
-                {item.orderId && (
-                    <View style={styles.orderIdContainer}>
-                        <Package size={14} color={Colors.primary} />
-                        <Text style={styles.orderIdText}>Order #{item.orderId.substring(0, 12)}</Text>
-                    </View>
-                )}
-
-                <View style={styles.actionsContainer}>
-                    {item.hasReorderButton && (
-                        <TouchableOpacity style={styles.reorderButton} onPress={() => handleReorderNow(item)}>
-                            <ShoppingCart size={16} color={Colors.white} />
-                            <Text style={styles.reorderButtonText}>Reorder Now</Text>
-                            <ChevronRight size={16} color={Colors.white} />
+                        <View style={styles.headerContent}>
+                            <View style={styles.titleRow}>
+                                <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]} numberOfLines={1}>
+                                    {item.title}
+                                </Text>
+                                {!item.read && <View style={styles.unreadDot} />}
+                            </View>
+                            <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+                        </View>
+                        <TouchableOpacity
+                            style={styles.deleteIconButton}
+                            onPress={() => handleDeleteNotification(item)}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                            <X size={18} color={Colors.textMuted} />
                         </TouchableOpacity>
+                    </View>
+
+                    {/* Message */}
+                    <View style={styles.messageContainer}>
+                        <Text style={styles.message}>{item.message}</Text>
+                    </View>
+
+                    {/* Order ID Badge */}
+                    {item.orderId && (
+                        <View style={styles.orderIdContainer}>
+                            <Package size={14} color={Colors.primary} />
+                            <Text style={styles.orderIdText}>Order #{item.orderId.substring(0, 12)}</Text>
+                        </View>
                     )}
 
-                    <TouchableOpacity
-                        style={[styles.deleteButton, item.hasReorderButton && styles.deleteButtonSmall]}
-                        onPress={() => handleDeleteNotification(item)}
-                    >
-                        <Trash2 size={18} color={Colors.error} />
-                        {!item.hasReorderButton && <Text style={styles.deleteButtonText}>Delete</Text>}
-                    </TouchableOpacity>
-                </View>
-            </TouchableOpacity>
+                    {/* Reorder Button */}
+                    {item.hasReorderButton && (
+                        <TouchableOpacity style={styles.reorderButton} onPress={() => handleReorderNow(item)} activeOpacity={0.8}>
+                            <ShoppingCart size={18} color={Colors.white} />
+                            <Text style={styles.reorderButtonText}>Reorder Now</Text>
+                            <ChevronRight size={18} color={Colors.white} />
+                        </TouchableOpacity>
+                    )}
+                </TouchableOpacity>
+            </Animated.View>
         )
     }
 
     return (
         <SafeAreaView style={styles.container}>
+            {/* Header */}
             <View style={styles.header}>
-                <View>
-                    <Text style={styles.headerTitle}>Notifications</Text>
-                    <Text style={styles.headerSubtitle}>{notifications.filter((n) => !n.read).length} unread notifications</Text>
+                <View style={styles.headerLeft}>
+                    <View style={styles.headerIconContainer}>
+                        <BellRing size={24} color={Colors.primary} />
+                    </View>
+                    <View>
+                        <Text style={styles.headerTitle}>Notifications</Text>
+                        <Text style={styles.headerSubtitle}>{unreadCount > 0 ? `${unreadCount} unread` : "All caught up!"}</Text>
+                    </View>
                 </View>
+                {unreadCount > 0 && (
+                    <TouchableOpacity style={styles.markAllButton} onPress={handleMarkAllAsRead}>
+                        <CheckCircle size={16} color={Colors.primary} />
+                        <Text style={styles.markAllText}>Mark all read</Text>
+                    </TouchableOpacity>
+                )}
             </View>
 
+            {/* Notification Stats */}
+            {notifications.length > 0 && (
+                <View style={styles.statsContainer}>
+                    <View style={styles.statItem}>
+                        <Text style={styles.statValue}>{notifications.length}</Text>
+                        <Text style={styles.statLabel}>Total</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                        <Text style={[styles.statValue, { color: Colors.primary }]}>{unreadCount}</Text>
+                        <Text style={styles.statLabel}>Unread</Text>
+                    </View>
+                    <View style={styles.statDivider} />
+                    <View style={styles.statItem}>
+                        <Text style={[styles.statValue, { color: "#059669" }]}>{notifications.length - unreadCount}</Text>
+                        <Text style={styles.statLabel}>Read</Text>
+                    </View>
+                </View>
+            )}
+
+            {/* Notifications List */}
             <FlatList
                 data={notifications}
                 keyExtractor={(item) => item.id}
                 renderItem={renderNotificationCard}
                 contentContainerStyle={styles.list}
-                refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchNotifications} />}
+                refreshControl={
+                    <RefreshControl refreshing={loading} onRefresh={fetchNotifications} colors={[Colors.primary]} />
+                }
+                showsVerticalScrollIndicator={false}
                 ListEmptyComponent={
                     <View style={styles.emptyContainer}>
                         <View style={styles.emptyIconContainer}>
-                            <Bell size={48} color={Colors.textMuted} />
+                            <Bell size={56} color={Colors.textMuted} />
                         </View>
                         <Text style={styles.emptyTitle}>No notifications yet</Text>
-                        <Text style={styles.emptyText}>When you receive notifications, they will appear here</Text>
+                        <Text style={styles.emptyText}>
+                            When you receive order updates, reminders, or alerts, they will appear here
+                        </Text>
                     </View>
                 }
             />
@@ -299,20 +375,86 @@ const styles = StyleSheet.create({
         backgroundColor: Colors.background,
     },
     header: {
-        padding: 20,
+        flexDirection: "row",
+        justifyContent: "space-between",
+        alignItems: "center",
+        paddingHorizontal: 20,
+        paddingVertical: 16,
         backgroundColor: Colors.white,
         borderBottomWidth: 1,
         borderBottomColor: Colors.border,
     },
+    headerLeft: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 12,
+    },
+    headerIconContainer: {
+        width: 48,
+        height: 48,
+        borderRadius: 24,
+        backgroundColor: Colors.logoback,
+        alignItems: "center",
+        justifyContent: "center",
+    },
     headerTitle: {
-        fontSize: 24,
+        fontSize: 22,
         fontWeight: "bold",
         color: Colors.charcoal,
     },
     headerSubtitle: {
-        fontSize: 14,
+        fontSize: 13,
+        color: Colors.textMuted,
+        marginTop: 2,
+    },
+    markAllButton: {
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        backgroundColor: Colors.logoback,
+        borderRadius: 20,
+    },
+    markAllText: {
+        fontSize: 12,
+        fontWeight: "600",
+        color: Colors.primary,
+    },
+    statsContainer: {
+        flexDirection: "row",
+        backgroundColor: Colors.white,
+        marginHorizontal: 16,
+        marginTop: 16,
+        borderRadius: 16,
+        paddingVertical: 16,
+        paddingHorizontal: 24,
+        borderWidth: 1,
+        borderColor: Colors.border,
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.05,
+        shadowRadius: 8,
+        elevation: 2,
+    },
+    statItem: {
+        flex: 1,
+        alignItems: "center",
+    },
+    statValue: {
+        fontSize: 24,
+        fontWeight: "bold",
+        color: Colors.charcoal,
+    },
+    statLabel: {
+        fontSize: 12,
         color: Colors.textMuted,
         marginTop: 4,
+    },
+    statDivider: {
+        width: 1,
+        height: "100%",
+        backgroundColor: Colors.border,
     },
     list: {
         padding: 16,
@@ -324,27 +466,28 @@ const styles = StyleSheet.create({
         padding: 16,
         borderWidth: 1,
         borderColor: Colors.border,
-        marginBottom: 4,
+        marginBottom: 8,
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-        elevation: 1,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        elevation: 2,
     },
     unreadCard: {
         borderLeftWidth: 4,
         borderLeftColor: Colors.primary,
-        backgroundColor: "#FAFBFF",
+        backgroundColor: "#FAFFFE",
     },
     cardHeader: {
         flexDirection: "row",
+        alignItems: "flex-start",
         gap: 12,
         marginBottom: 12,
     },
     iconContainer: {
-        width: 44,
-        height: 44,
-        borderRadius: 12,
+        width: 48,
+        height: 48,
+        borderRadius: 14,
         alignItems: "center",
         justifyContent: "center",
     },
@@ -364,38 +507,40 @@ const styles = StyleSheet.create({
     },
     unreadTitle: {
         fontWeight: "700",
-        color: Colors.charcoal,
     },
     unreadDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4,
+        width: 10,
+        height: 10,
+        borderRadius: 5,
         backgroundColor: Colors.primary,
     },
     timestamp: {
         fontSize: 12,
         color: Colors.textMuted,
-        marginTop: 2,
+        marginTop: 4,
+    },
+    deleteIconButton: {
+        padding: 4,
     },
     messageContainer: {
         marginBottom: 12,
-        paddingLeft: 56,
+        paddingLeft: 60,
     },
     message: {
         fontSize: 14,
         color: Colors.text,
-        lineHeight: 20,
+        lineHeight: 22,
     },
     orderIdContainer: {
         flexDirection: "row",
         alignItems: "center",
-        gap: 6,
-        backgroundColor: "#F0F9FF",
-        paddingHorizontal: 12,
-        paddingVertical: 8,
-        borderRadius: 8,
+        gap: 8,
+        backgroundColor: Colors.logoback,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 10,
         marginBottom: 12,
-        marginLeft: 56,
+        marginLeft: 60,
         alignSelf: "flex-start",
     },
     orderIdText: {
@@ -403,74 +548,56 @@ const styles = StyleSheet.create({
         color: Colors.primary,
         fontWeight: "600",
     },
-    actionsContainer: {
-        flexDirection: "row",
-        gap: 8,
-        marginLeft: 56,
-    },
     reorderButton: {
-        flex: 1,
         backgroundColor: Colors.primary,
-        borderRadius: 10,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 20,
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
+        gap: 10,
+        marginLeft: 60,
+        shadowColor: Colors.primary,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
     },
     reorderButtonText: {
         color: Colors.white,
-        fontWeight: "600",
-        fontSize: 14,
+        fontWeight: "700",
+        fontSize: 15,
         flex: 1,
         textAlign: "center",
-    },
-    deleteButton: {
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 6,
-        paddingVertical: 12,
-        paddingHorizontal: 16,
-        borderRadius: 10,
-        backgroundColor: "#FEF2F2",
-        borderWidth: 1,
-        borderColor: "#FECACA",
-    },
-    deleteButtonSmall: {
-        paddingHorizontal: 12,
-    },
-    deleteButtonText: {
-        color: Colors.error,
-        fontWeight: "600",
-        fontSize: 14,
     },
     emptyContainer: {
         flex: 1,
         alignItems: "center",
         justifyContent: "center",
         paddingVertical: 80,
+        paddingHorizontal: 40,
     },
     emptyIconContainer: {
-        width: 100,
-        height: 100,
-        borderRadius: 50,
+        width: 120,
+        height: 120,
+        borderRadius: 60,
         backgroundColor: "#F3F4F6",
         alignItems: "center",
         justifyContent: "center",
-        marginBottom: 20,
+        marginBottom: 24,
     },
     emptyTitle: {
-        fontSize: 20,
+        fontSize: 22,
         fontWeight: "bold",
         color: Colors.charcoal,
-        marginBottom: 8,
+        marginBottom: 12,
+        textAlign: "center",
     },
     emptyText: {
-        fontSize: 14,
+        fontSize: 15,
         color: Colors.textMuted,
         textAlign: "center",
-        paddingHorizontal: 40,
+        lineHeight: 22,
     },
 })

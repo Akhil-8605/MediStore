@@ -6,6 +6,8 @@ import {
 } from "firebase/auth"
 import { auth, db } from "../config/firebase"
 import { doc, setDoc, getDoc, updateDoc } from "firebase/firestore"
+import { notifyAdminNewUser } from "./pushNotificationService"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
 export interface UserData {
     uid: string
@@ -20,7 +22,11 @@ export interface UserData {
     reminders: any[]
     reminderDates?: any[]
     reorderCount?: number
+    pushToken?: string
 }
+
+const ADMIN_LOGIN_KEY = "medistore_admin_logged_in"
+const LAST_LOGIN_TYPE_KEY = "medistore_last_login_type"
 
 export const authService = {
     // Sign up new user
@@ -44,6 +50,16 @@ export const authService = {
         }
 
         await setDoc(doc(db, "AllUsers", user.uid), userData)
+
+        await notifyAdminNewUser({
+            name,
+            email,
+            userId: user.uid,
+        })
+
+        // Store login type
+        await AsyncStorage.setItem(LAST_LOGIN_TYPE_KEY, "user")
+
         return userData
     },
 
@@ -79,7 +95,29 @@ export const authService = {
             await setDoc(doc(db, "AllUsers", user.uid), userData)
         }
 
+        // Store login type
+        await AsyncStorage.setItem(LAST_LOGIN_TYPE_KEY, "user")
+
         return user
+    },
+
+    async adminLogin(): Promise<void> {
+        await AsyncStorage.setItem(ADMIN_LOGIN_KEY, "true")
+        await AsyncStorage.setItem(LAST_LOGIN_TYPE_KEY, "admin")
+    },
+
+    async wasLastLoginAdmin(): Promise<boolean> {
+        const loginType = await AsyncStorage.getItem(LAST_LOGIN_TYPE_KEY)
+        return loginType === "admin"
+    },
+
+    async isAdminLoggedIn(): Promise<boolean> {
+        const adminLoggedIn = await AsyncStorage.getItem(ADMIN_LOGIN_KEY)
+        return adminLoggedIn === "true"
+    },
+
+    async adminLogout(): Promise<void> {
+        await AsyncStorage.removeItem(ADMIN_LOGIN_KEY)
     },
 
     // Send password reset email
@@ -90,6 +128,7 @@ export const authService = {
     // Logout user
     async logout() {
         await signOut(auth)
+        await AsyncStorage.removeItem(ADMIN_LOGIN_KEY)
     },
 
     // Get current user data

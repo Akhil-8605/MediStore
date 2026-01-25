@@ -2,6 +2,7 @@ import { db } from "../config/firebase"
 import { arrayUnion, collection, doc, getDoc, getDocs, query, updateDoc, where } from "firebase/firestore"
 import { addDeliveredOrder, updateMedicineStock } from "./adminService"
 import { firestoreService } from "./firestoreService"
+import { notifyUserOrderStatusChanged } from "./pushNotificationService"
 
 export type OrderStatus = "pending" | "delivered" | "cancelled"
 
@@ -39,13 +40,12 @@ export const orderManagementService = {
                 })
 
                 if (newStatus === "delivered" && originalOrder) {
-                    // Add to DeliveredOrders collection
                     await addDeliveredOrder({
                         orderId: originalOrder.orderId,
                         userId: userId,
                         userName: userData.name || "Unknown",
                         userEmail: userData.email || "N/A",
-                        userPhone: userData.phone || "N/A",
+                        userPhone: userData.phone || userData.mobile || "N/A",
                         items: originalOrder.items || [],
                         totalAmount: originalOrder.total || 0,
                         deliveryAddress: originalOrder.deliveryAddress || "N/A",
@@ -53,7 +53,6 @@ export const orderManagementService = {
                         createdAt: originalOrder.createdAt || new Date().toISOString(),
                     })
 
-                    // Update medicine stock (subtract quantities)
                     for (const item of originalOrder.items || []) {
                         if (item.id) {
                             await updateMedicineStock(item.id, item.quantity || 1)
@@ -61,7 +60,7 @@ export const orderManagementService = {
                     }
                 }
 
-                // Send notification to user
+                // Send in-app notification to user
                 const statusMessages = {
                     pending: `Your order ${orderId} is being processed`,
                     delivered: `Your order ${orderId} has been delivered! Thank you for your purchase.`,
@@ -81,6 +80,8 @@ export const orderManagementService = {
 
                 await firestoreService.addNotification(userId, notification)
 
+                await notifyUserOrderStatusChanged(userId, orderId, newStatus)
+
                 console.log("Order status updated:", orderId, "->", newStatus)
                 return true
             }
@@ -98,13 +99,12 @@ export const orderManagementService = {
             })
 
             if (newStatus === "delivered" && originalOrder) {
-                // Add to DeliveredOrders collection
                 await addDeliveredOrder({
                     orderId: originalOrder.orderId,
                     userId: userId,
                     userName: userData.name || "Unknown",
                     userEmail: userData.email || "N/A",
-                    userPhone: userData.phone || "N/A",
+                    userPhone: userData.phone || userData.mobile || "N/A",
                     items: originalOrder.items || [],
                     totalAmount: originalOrder.total || 0,
                     deliveryAddress: originalOrder.deliveryAddress || "N/A",
@@ -112,7 +112,6 @@ export const orderManagementService = {
                     createdAt: originalOrder.createdAt || new Date().toISOString(),
                 })
 
-                // Update medicine stock (subtract quantities)
                 for (const item of originalOrder.items || []) {
                     if (item.id) {
                         await updateMedicineStock(item.id, item.quantity || 1)
@@ -120,7 +119,7 @@ export const orderManagementService = {
                 }
             }
 
-            // Send notification to user
+            // Send in-app notification to user
             const statusMessages = {
                 pending: `Your order ${orderId} is being processed`,
                 delivered: `Your order ${orderId} has been delivered! Thank you for your purchase.`,
@@ -139,6 +138,8 @@ export const orderManagementService = {
             }
 
             await firestoreService.addNotification(userSnap.docs[0].id, notification)
+
+            await notifyUserOrderStatusChanged(userSnap.docs[0].id, orderId, newStatus)
 
             console.log("Order status updated:", orderId, "->", newStatus)
 
@@ -165,7 +166,7 @@ export const orderManagementService = {
                                 userId: userDoc.id,
                                 userName: userData.name,
                                 userEmail: userData.email,
-                                userPhone: userData.phone,
+                                userPhone: userData.phone || userData.mobile,
                             })
                         }
                     })

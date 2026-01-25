@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { View, StyleSheet } from "react-native"
 import { Stack } from "expo-router"
 import { Colors } from "../../constants/Colors"
@@ -9,13 +9,24 @@ import AdminDrawer from "../../components/Admin/AdminDrawer"
 import { Menu } from "lucide-react-native"
 import { TouchableOpacity } from "react-native"
 import { useRoute } from "@react-navigation/native"
+import { pushNotificationService } from "../../services/pushNotificationService"
+import { authService } from "../../services/authService"
 
 export default function AdminLayout() {
   const [drawerVisible, setDrawerVisible] = useState(false)
   const route = useRoute()
 
+  useEffect(() => {
+    const initAdmin = async () => {
+      await authService.adminLogin()
+      await pushNotificationService.initialize(undefined, true)
+    }
+    initAdmin()
+  }, [])
+
   const getActiveRoute = () => {
     if (route?.name?.includes("orders")) return "orders"
+    if (route?.name?.includes("notifications")) return "notifications"
     return route?.name || "dashboard"
   }
 
@@ -74,6 +85,12 @@ export default function AdminLayout() {
             name="orders"
             options={{
               title: "Orders Management",
+            }}
+          />
+          <Stack.Screen
+            name="notifications"
+            options={{
+              title: "Notifications",
             }}
           />
         </Stack>

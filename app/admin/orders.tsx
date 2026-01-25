@@ -16,8 +16,11 @@ import {
     Text,
     TouchableOpacity,
     View,
+    Linking,
 } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "../../config/firebase"
 
 interface Order {
     orderId: string
@@ -29,7 +32,7 @@ interface Order {
     total: number
     status: OrderStatus
     createdAt: string
-    deliveryAddress: string
+    deliveryAddress?: string
     paymentMethod: string
 }
 
@@ -147,14 +150,100 @@ export default function AdminOrdersScreen() {
         }
     }
 
+    // Try to open dialer for a given phone string
+    const handleCall = async (phone?: string) => {
+        if (!phone) {
+            Alert.alert("No phone number", "Phone number not available")
+            return
+        }
+        // Normalize spaces
+        const normalized = phone.replace(/\s+/g, "")
+        const tel = `tel:${normalized}`
+        try {
+            const supported = await Linking.canOpenURL(tel)
+            if (!supported) {
+                Alert.alert("Cannot open dialer", "Phone call is not supported on this device")
+                return
+            }
+            await Linking.openURL(tel)
+        } catch (err) {
+            console.error("Call error:", err)
+            Alert.alert("Error", "Failed to start call")
+        }
+    }
+
+    // Enrich order with fallbacks from user doc (if phone/address are missing)
+    const openOrderModal = async (item: Order) => {
+        try {
+            let phone = item.userPhone || ""
+            let deliveryAddress =
+                item.deliveryAddress ||
+                (item as any).address ||
+                (item as any).shippingAddress ||
+                (item as any).shipping?.address ||
+                ""
+
+            // If missing, try to fetch user doc by document id (userId)
+            if ((!phone || !deliveryAddress) && item.userId) {
+                try {
+                    const userDocRef = doc(db, "AllUsers", item.userId)
+                    const userDocSnap = await getDoc(userDocRef)
+                    if (userDocSnap.exists()) {
+                        const userData = userDocSnap.data() as any
+                        phone =
+                            phone ||
+                            userData.phone ||
+                            userData.mobile ||
+                            userData.phoneNumber ||
+                            userData.contact ||
+                            ""
+                        // Find original order inside user doc orders to get deliveryAddress
+                        const ord =
+                            Array.isArray(userData.orders) && userData.orders.find((o: any) => o.orderId === item.orderId)
+                        if (ord) {
+                            deliveryAddress =
+                                deliveryAddress ||
+                                ord.deliveryAddress ||
+                                ord.address ||
+                                ord.shippingAddress ||
+                                (ord.shipping && ord.shipping.address) ||
+                                ""
+                        }
+                        // Also try top-level address fields on user doc
+                        deliveryAddress =
+                            deliveryAddress ||
+                            userData.address ||
+                            userData.deliveryAddress ||
+                            userData.defaultAddress ||
+                            ""
+                    }
+                } catch (err) {
+                    console.warn("Failed to fetch user doc for enrichment:", err)
+                }
+            }
+
+            const enriched: Order = {
+                ...item,
+                userPhone: phone || item.userPhone,
+                deliveryAddress: deliveryAddress || item.deliveryAddress || "N/A",
+            }
+            setSelectedOrder(enriched)
+            setShowStatusModal(true)
+        } catch (err) {
+            console.error("Error enriching order:", err)
+            // fallback to original
+            setSelectedOrder(item)
+            setShowStatusModal(true)
+        }
+    }
+
     const renderOrder = ({ item }: { item: Order }) => {
         const StatusIcon = getStatusIcon(item.status)
         return (
             <TouchableOpacity
                 style={styles.orderCard}
                 onPress={() => {
-                    setSelectedOrder(item)
-                    setShowStatusModal(true)
+                    openOrderModal(item)
                 }}
             >
                 <View style={styles.orderHeader}>
@@ -187,7 +276,7 @@ export default function AdminOrdersScreen() {
                 <View style={styles.orderFooter}>
                     <Text style={styles.date}>{formatDateTime(item.createdAt)}</Text>
                     <Text style={styles.address} numberOfLines={1}>
-                        {item.deliveryAddress}
+                        {item.deliveryAddress || (item as any).address || (item as any).shippingAddress || "N/A"}
                     </Text>
                 </View>
             </TouchableOpacity>
@@ -287,12 +376,20 @@ export default function AdminOrdersScreen() {
                                         <Text style={styles.infoLabel}>Email</Text>
                                         <Text style={styles.infoValue}>{selectedOrder.userEmail}</Text>
                                     </View>
-                                    {selectedOrder.userPhone && (
-                                        <View style={styles.infoRow}>
+
+                                    {/* Phone row with Call button */}
+                                    <View style={[styles.infoRow, { alignItems: "center" }]}>
+                                        <View style={{ flex: 1 }}>
                                             <Text style={styles.infoLabel}>Phone</Text>
-                                            <Text style={styles.infoValue}>{selectedOrder.userPhone}</Text>
+                                            <Text style={styles.infoValue}>{selectedOrder.userPhone || "N/A"}</Text>
                                         </View>
-                                    )}
+                                        <TouchableOpacity
+                                            style={styles.callButton}
+                                            onPress={() => handleCall(selectedOrder.userPhone)}
+                                        >
+                                            <Text style={styles.callButtonText}>Call</Text>
+                                        </TouchableOpacity>
+                                    </View>
                                 </View>
 
                                 <View style={styles.infoSection}>
@@ -323,7 +420,12 @@ export default function AdminOrdersScreen() {
                                         <MapPin size={16} color={Colors.primary} />
                                         <Text style={styles.infoSectionTitle}>Delivery Address</Text>
                                     </View>
-                                    <Text style={styles.addressText}>{selectedOrder.deliveryAddress}</Text>
+                                    <Text style={styles.addressText}>
+                                        {selectedOrder.deliveryAddress ||
+                                            (selectedOrder as any).address ||
+                                            (selectedOrder as any).shippingAddress ||
+                                            "N/A"}
+                                    </Text>
                                 </View>
 
                                 <View style={styles.itemsContainer}>
@@ -569,6 +671,22 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: "600",
         color: Colors.charcoal,
+    },
+    // Call button styles
+    callButton: {
+        marginLeft: 12,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        borderRadius: 8,
+        borderWidth: 1,
+        borderColor: Colors.primary,
+        backgroundColor: Colors.white,
+        alignSelf: "flex-start",
+    },
+    callButtonText: {
+        fontSize: 13,
+        fontWeight: "600",
+        color: Colors.primary,
     },
     addressText: {
         fontSize: 13,

@@ -43,5 +43,3 @@ app-example
 /android
 
 # Firebase service account keys
-
-config/

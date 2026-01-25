@@ -1,43 +1,29 @@
 import { db } from "../config/firebase"
-import { arrayUnion, doc, getDoc, Timestamp, updateDoc } from "firebase/firestore"
+import { doc, getDoc, Timestamp } from "firebase/firestore"
 import { addPaymentRecord, updateMedicineStock } from "./adminService"
 
 export const orderService = {
-    async completeOrder(
+    async processOrderSideEffects(
         userId: string,
+        orderId: string,
         items: any[],
         totalAmount: number,
         paymentMethod: "COD" | "UPI",
         reminderDays?: number,
-    ): Promise<string> {
+    ): Promise<void> {
         try {
-            const orderId = `ORD-${Date.now()}`
             const userRef = doc(db, "AllUsers", userId)
 
             const userSnap = await getDoc(userRef)
             if (!userSnap.exists()) {
                 throw new Error("User not found")
             }
+
             const userData = userSnap.data()
             const userName = userData.name || "Unknown User"
             const userEmail = userData.email || "unknown@email.com"
 
-            // Create order object
-            const order = {
-                orderId,
-                items,
-                total: totalAmount,
-                paymentMethod,
-                paymentStatus: "Success",
-                status: "pending",
-                createdAt: new Date().toISOString(),
-            }
-
-            // Add order to user's orders array
-            await updateDoc(userRef, {
-                orders: arrayUnion(order),
-            })
-
+            // Add payment record (no duplicate order creation)
             await addPaymentRecord({
                 orderId,
                 userName,
@@ -48,11 +34,14 @@ export const orderService = {
                 createdAt: Timestamp.now(),
             })
 
+            // Update medicine stock
             for (const item of items) {
                 await updateMedicineStock(item.id, item.quantity)
             }
 
+            // Handle reminders if specified
             if (reminderDays && reminderDays > 0) {
+                const { updateDoc, arrayUnion } = await import("firebase/firestore")
                 const dueDate = new Date()
                 dueDate.setDate(dueDate.getDate() + reminderDays)
 
@@ -71,11 +60,25 @@ export const orderService = {
                 })
             }
 
-            console.log("Order completed:", orderId)
-            return orderId
+            console.log("Order side effects processed for:", orderId)
         } catch (error) {
-            console.error("Error completing order:", error)
+            console.error("Error processing order side effects:", error)
             throw error
         }
+    },
+
+    // Keep legacy function for backward compatibility but mark as deprecated
+    /** @deprecated Use processOrderSideEffects instead to avoid duplicate orders */
+    async completeOrder(
+        userId: string,
+        items: any[],
+        totalAmount: number,
+        paymentMethod: "COD" | "UPI",
+        reminderDays?: number,
+    ): Promise<string> {
+        // Generate orderId for backward compatibility
+        const orderId = `ORD-${Date.now()}`
+        await this.processOrderSideEffects(userId, orderId, items, totalAmount, paymentMethod, reminderDays)
+        return orderId
     },
 }

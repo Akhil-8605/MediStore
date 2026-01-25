@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "827077964566",
+    "project_id": "medistore-8605",
+    "storage_bucket": "medistore-8605.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:827077964566:android:6fca0c0ecfb24297f41637",
+        "android_client_info": {
+          "package_name": "com.akhil8605.MediStore"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBAvb1CVX0RTeQ_PJ31Z_dyCN7KLIypw2U"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -24,7 +24,7 @@ import { passwordService } from "../../services/passwordServices"
 
 const MENU_ITEMS = [
   { icon: Package, label: "My Orders", route: "/orders" },
-  { icon: Bell, label: "Notifications", route: "/user/notifications" },
+  { icon: Bell, label: "Notifications", route: "/user/notification" },
 ]
 
 export default function ProfileScreen() {

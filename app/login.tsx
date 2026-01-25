@@ -2,12 +2,13 @@
 
 import { useAuth } from "../context/AuthContext"
 import { useEffect, useState } from "react"
-import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View, Image } from "react-native"
+import { SafeAreaView, ScrollView, StyleSheet, Text, TouchableOpacity, View } from "react-native"
 import { Colors } from "../constants/Colors"
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
 import { useRouter } from "expo-router"
 import { authService } from "../services/authService"
+import { pushNotificationService } from "../services/pushNotificationService"
 
 export default function LoginScreen() {
   const [activeTab, setActiveTab] = useState<"user" | "admin">("user")
@@ -27,6 +28,17 @@ export default function LoginScreen() {
     }
   }, [user])
 
+  useEffect(() => {
+    const checkAdminLogin = async () => {
+      const wasAdmin = await authService.wasLastLoginAdmin()
+      const adminLoggedIn = await authService.isAdminLoggedIn()
+      if (wasAdmin && adminLoggedIn) {
+        router.replace("/admin/dashboard")
+      }
+    }
+    checkAdminLogin()
+  }, [])
+
   const handleLogin = async () => {
     if (!email || !password) {
       setError("Please fill in all fields")
@@ -37,7 +49,9 @@ export default function LoginScreen() {
       setLoading(true)
       setError("")
 
-      if (email == "admin@gmail.com" || password == "admin@12345") {
+      if (email === "admin@gmail.com" && password === "admin@12345") {
+        await authService.adminLogin()
+        await pushNotificationService.initialize(undefined, true)
         router.replace("/admin/dashboard")
         return
       }
@@ -109,9 +123,6 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <View style={styles.header}>
-          {/* <View style={styles.logoContainer}>
-            <Text style={styles.iconContainer}><Image source={Logo} /></Text>
-          </View> */}
           <Text style={styles.title}>Welcome Back</Text>
           <Text style={styles.subtitle}>Sign in to your MediStore account</Text>
         </View>
@@ -196,8 +207,8 @@ const styles = StyleSheet.create({
     height: 150,
     backgroundColor: Colors.logoback,
     borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 32,
   },
   tabsContainer: {

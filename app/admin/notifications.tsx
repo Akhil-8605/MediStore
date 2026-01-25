@@ -1,144 +1,126 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Modal,
-  Alert,
-  RefreshControl,
-  TextInput,
-  ScrollView,
-  ActivityIndicator,
-} from "react-native"
+import { useState, useEffect, useCallback } from "react"
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from "react-native"
 import { SafeAreaView } from "react-native-safe-area-context"
 import { Colors } from "../../constants/Colors"
-import { Bell, X, Send, Package, Mail, Phone, MapPin, Calendar, ShoppingCart } from "lucide-react-native"
-import { getDocs, collection, updateDoc, doc, arrayUnion } from "firebase/firestore"
+import { Bell, BellRing, ShoppingCart, UserPlus, AlertTriangle, CheckCircle, X } from "lucide-react-native"
+import { collection, getDocs, doc, updateDoc, deleteDoc, query, orderBy } from "firebase/firestore"
 import { db } from "../../config/firebase"
+import { router } from "expo-router"
+import { pushNotificationService } from "../../services/pushNotificationService"
 
-interface DeliveredOrderReminder {
+interface AdminNotification {
   id: string
-  orderId: string
-  userName: string
-  userEmail: string
-  userPhone: string
-  userId: string
-  reminderDate: Date
-  items: any[]
-  totalAmount: number
-  deliveryAddress: string
-  deliveredAt: any
-  createdAt: string
+  title: string
+  body: string
+  type: "new_order" | "new_user" | "alert" | "low_stock"
+  data?: any
+  timestamp: string
+  read: boolean
 }
 
-export default function AdminAlertsScreen() {
-  const [orders, setOrders] = useState<DeliveredOrderReminder[]>([])
+export default function AdminNotificationsScreen() {
+  const [notifications, setNotifications] = useState<AdminNotification[]>([])
   const [loading, setLoading] = useState(false)
-  const [selectedOrder, setSelectedOrder] = useState<DeliveredOrderReminder | null>(null)
-  const [modalVisible, setModalVisible] = useState(false)
-  const [messageText, setMessageText] = useState("")
-  const [sendingNotification, setSendingNotification] = useState(false)
 
-  const fetchDeliveredOrders = async () => {
+  const fetchNotifications = useCallback(async () => {
     setLoading(true)
     try {
-      const deliveredSnapshot = await getDocs(collection(db, "DeliveredOrders"))
-      const deliveredOrders: DeliveredOrderReminder[] = []
+      const notificationsQuery = query(collection(db, "AdminNotifications"), orderBy("timestamp", "desc"))
+      const snapshot = await getDocs(notificationsQuery)
+      const notifs: AdminNotification[] = []
 
-      deliveredSnapshot.forEach((docSnap) => {
-        const data = docSnap.data()
-        const deliveredDate = data.deliveredAt?.toDate?.() || new Date(data.createdAt)
-        // Calculate reminder date (e.g., 30 days from delivery)
-        const reminderDate = new Date(deliveredDate)
-        reminderDate.setDate(reminderDate.getDate() + 30)
-
-        deliveredOrders.push({
+      snapshot.forEach((docSnap) => {
+        notifs.push({
           id: docSnap.id,
-          orderId: data.orderId,
-          userName: data.userName || "Unknown",
-          userEmail: data.userEmail || "N/A",
-          userPhone: data.userPhone || "N/A",
-          userId: data.userId,
-          reminderDate,
-          items: data.items || [],
-          totalAmount: data.totalAmount || 0,
-          deliveryAddress: data.deliveryAddress || "N/A",
-          deliveredAt: data.deliveredAt,
-          createdAt: data.createdAt,
-        })
+          ...docSnap.data(),
+        } as AdminNotification)
       })
 
-      // Sort by reminder date (closest first)
-      deliveredOrders.sort((a, b) => a.reminderDate.getTime() - b.reminderDate.getTime())
-      setOrders(deliveredOrders)
+      setNotifications(notifs)
+
+      // Update badge count
+      const unreadCount = notifs.filter((n) => !n.read).length
+      pushNotificationService.setBadgeCount(unreadCount)
     } catch (error) {
-      console.error("Error fetching delivered orders:", error)
-      Alert.alert("Error", "Failed to load delivered orders")
+      console.error("Error fetching admin notifications:", error)
     } finally {
       setLoading(false)
     }
-  }
-
-  useEffect(() => {
-    fetchDeliveredOrders()
   }, [])
 
-  const generateNotificationText = (order: DeliveredOrderReminder) => {
-    const itemsList = order.items.map((item: any) => item.name).join(", ")
-    return `Hello ${order.userName}, your order #${order.orderId.substring(0, 10)} items (${itemsList}) are getting over. Would you like to reorder?`
-  }
+  useEffect(() => {
+    fetchNotifications()
 
-  const handleOpenOrderDetail = (order: DeliveredOrderReminder) => {
-    setSelectedOrder(order)
-    setMessageText(generateNotificationText(order))
-    setModalVisible(true)
-  }
+    // Initialize push notifications for admin
+    pushNotificationService.initialize(undefined, true)
+  }, [fetchNotifications])
 
-  const handleSendReminder = async () => {
-    if (!selectedOrder || !messageText.trim()) {
-      Alert.alert("Error", "Please enter a message")
-      return
-    }
+  const handleMarkAsRead = async (notification: AdminNotification) => {
+    if (notification.read) return
 
-    setSendingNotification(true)
     try {
-      const userRef = doc(db, "AllUsers", selectedOrder.userId)
-      const notification = {
-        id: `reminder-${selectedOrder.orderId}-${Date.now()}`,
-        title: "Reorder Reminder",
-        message: messageText,
-        timestamp: new Date().toISOString(),
-        read: false,
-        type: "reminder",
-        orderId: selectedOrder.orderId,
-        hasReorderButton: true,
-        items: selectedOrder.items,
-      }
-
-      await updateDoc(userRef, {
-        notifications: arrayUnion(notification),
+      await updateDoc(doc(db, "AdminNotifications", notification.id), {
+        read: true,
       })
-
-      Alert.alert("Success", "Reminder notification sent to user!")
-      setModalVisible(false)
-      setMessageText("")
-      setSelectedOrder(null)
+      fetchNotifications()
     } catch (error) {
-      console.error("Error sending reminder:", error)
-      Alert.alert("Error", "Failed to send reminder")
-    } finally {
-      setSendingNotification(false)
+      console.error("Error marking as read:", error)
     }
   }
 
-  const formatDate = (date: Date | any) => {
+  const handleDeleteNotification = async (notification: AdminNotification) => {
     try {
-      const d = date?.toDate?.() || new Date(date)
-      return d.toLocaleDateString("en-IN", {
+      await deleteDoc(doc(db, "AdminNotifications", notification.id))
+      fetchNotifications()
+    } catch (error) {
+      console.error("Error deleting notification:", error)
+    }
+  }
+
+  const handleMarkAllAsRead = async () => {
+    try {
+      const unreadNotifications = notifications.filter((n) => !n.read)
+      await Promise.all(unreadNotifications.map((n) => updateDoc(doc(db, "AdminNotifications", n.id), { read: true })))
+      fetchNotifications()
+    } catch (error) {
+      console.error("Error marking all as read:", error)
+    }
+  }
+
+  const handleNotificationTap = (notification: AdminNotification) => {
+    handleMarkAsRead(notification)
+
+    switch (notification.type) {
+      case "new_order":
+        router.push("/admin/orders")
+        break
+      case "new_user":
+        router.push("/admin/users")
+        break
+      case "alert":
+      case "low_stock":
+        router.push("/admin/alerts")
+        break
+    }
+  }
+
+  const formatDate = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diffMs = now.getTime() - date.getTime()
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffHours = Math.floor(diffMs / 3600000)
+      const diffDays = Math.floor(diffMs / 86400000)
+
+      if (diffMins < 1) return "Just now"
+      if (diffMins < 60) return `${diffMins}m ago`
+      if (diffHours < 24) return `${diffHours}h ago`
+      if (diffDays < 7) return `${diffDays}d ago`
+
+      return date.toLocaleDateString("en-IN", {
         day: "numeric",
         month: "short",
         year: "numeric",
@@ -148,57 +130,79 @@ export default function AdminAlertsScreen() {
     }
   }
 
-  const getDaysUntilReminder = (reminderDate: Date) => {
-    const now = new Date()
-    const diff = reminderDate.getTime() - now.getTime()
-    const days = Math.ceil(diff / (1000 * 60 * 60 * 24))
-    return days
+  const getNotificationIcon = (type: string) => {
+    switch (type) {
+      case "new_order":
+        return ShoppingCart
+      case "new_user":
+        return UserPlus
+      case "alert":
+      case "low_stock":
+        return AlertTriangle
+      default:
+        return Bell
+    }
   }
 
-  const renderOrderCard = ({ item }: { item: DeliveredOrderReminder }) => {
-    const daysUntil = getDaysUntilReminder(item.reminderDate)
-    const isOverdue = daysUntil <= 0
-    const isUrgent = daysUntil > 0 && daysUntil <= 7
+  const getIconColors = (type: string, read: boolean) => {
+    if (read) {
+      return { bg: "#F3F4F6", icon: Colors.textMuted }
+    }
+
+    switch (type) {
+      case "new_order":
+        return { bg: "#DBEAFE", icon: "#2563EB" }
+      case "new_user":
+        return { bg: "#DCFCE7", icon: "#059669" }
+      case "alert":
+      case "low_stock":
+        return { bg: "#FEE2E2", icon: "#DC2626" }
+      default:
+        return { bg: Colors.logoback, icon: Colors.primary }
+    }
+  }
+
+  const unreadCount = notifications.filter((n) => !n.read).length
+
+  const renderNotificationCard = ({ item }: { item: AdminNotification }) => {
+    const IconComponent = getNotificationIcon(item.type)
+    const colors = getIconColors(item.type, item.read)
 
     return (
-      <TouchableOpacity style={styles.card} onPress={() => handleOpenOrderDetail(item)} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={[styles.card, !item.read && styles.unreadCard]}
+        onPress={() => handleNotificationTap(item)}
+        activeOpacity={0.7}
+      >
         <View style={styles.cardHeader}>
-          <View style={styles.orderInfo}>
-            <Text style={styles.orderId}>#{item.orderId.substring(0, 10)}</Text>
-            <Text style={styles.userName}>{item.userName}</Text>
+          <View style={[styles.iconContainer, { backgroundColor: colors.bg }]}>
+            <IconComponent size={22} color={colors.icon} />
           </View>
-          <View
-            style={[
-              styles.reminderBadge,
-              { backgroundColor: isOverdue ? "#FEE2E2" : isUrgent ? "#FEF3C7" : "#DCFCE7" },
-            ]}
+          <View style={styles.headerContent}>
+            <View style={styles.titleRow}>
+              <Text style={[styles.notifTitle, !item.read && styles.unreadTitle]} numberOfLines={1}>
+                {item.title}
+              </Text>
+              {!item.read && <View style={styles.unreadDot} />}
+            </View>
+            <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.deleteIconButton}
+            onPress={() => handleDeleteNotification(item)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={[styles.reminderText, { color: isOverdue ? "#991B1B" : isUrgent ? "#92400E" : "#166534" }]}>
-              {isOverdue ? "Overdue" : `${daysUntil}d`}
-            </Text>
-          </View>
+            <X size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.orderDetails}>
-          <View style={styles.detailRow}>
-            <Package size={14} color={Colors.textMuted} />
-            <Text style={styles.detailText}>{item.items.length} items</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Calendar size={14} color={Colors.textMuted} />
-            <Text style={styles.detailText}>Delivered: {formatDate(item.deliveredAt)}</Text>
-          </View>
+        <View style={styles.messageContainer}>
+          <Text style={styles.message}>{item.body}</Text>
         </View>
 
-        <View style={styles.amountRow}>
-          <Text style={styles.amountLabel}>Total Amount</Text>
-          <Text style={styles.amountValue}>₹{item.totalAmount.toFixed(2)}</Text>
+        <View style={styles.typeTag}>
+          <Text style={[styles.typeTagText, { color: colors.icon }]}>{item.type.replace("_", " ").toUpperCase()}</Text>
         </View>
-
-        <TouchableOpacity style={styles.openButton} onPress={() => handleOpenOrderDetail(item)}>
-          <Bell size={16} color={Colors.white} />
-          <Text style={styles.openButtonText}>View & Send Reminder</Text>
-        </TouchableOpacity>
       </TouchableOpacity>
     )
   }
@@ -206,118 +210,72 @@ export default function AdminAlertsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Delivered Orders</Text>
-        <Text style={styles.subtitle}>Send reorder reminders to users</Text>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerIconContainer}>
+            <BellRing size={24} color={Colors.primary} />
+          </View>
+          <View>
+            <Text style={styles.headerTitle}>Admin Notifications</Text>
+            <Text style={styles.headerSubtitle}>
+              {unreadCount > 0 ? `${unreadCount} unread alerts` : "All caught up!"}
+            </Text>
+          </View>
+        </View>
+        {unreadCount > 0 && (
+          <TouchableOpacity style={styles.markAllButton} onPress={handleMarkAllAsRead}>
+            <CheckCircle size={16} color={Colors.primary} />
+            <Text style={styles.markAllText}>Mark all</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
+      {notifications.length > 0 && (
+        <View style={styles.statsContainer}>
+          <View style={styles.statItem}>
+            <View style={[styles.statIcon, { backgroundColor: "#DBEAFE" }]}>
+              <ShoppingCart size={16} color="#2563EB" />
+            </View>
+            <Text style={styles.statValue}>{notifications.filter((n) => n.type === "new_order").length}</Text>
+            <Text style={styles.statLabel}>Orders</Text>
+          </View>
+          <View style={styles.statItem}>
+            <View style={[styles.statIcon, { backgroundColor: "#DCFCE7" }]}>
+              <UserPlus size={16} color="#059669" />
+            </View>
+            <Text style={styles.statValue}>{notifications.filter((n) => n.type === "new_user").length}</Text>
+            <Text style={styles.statLabel}>Users</Text>
+          </View>
+          <View style={styles.statItem}>
+            <View style={[styles.statIcon, { backgroundColor: "#FEE2E2" }]}>
+              <AlertTriangle size={16} color="#DC2626" />
+            </View>
+            <Text style={styles.statValue}>
+              {notifications.filter((n) => n.type === "alert" || n.type === "low_stock").length}
+            </Text>
+            <Text style={styles.statLabel}>Alerts</Text>
+          </View>
+        </View>
+      )}
+
       <FlatList
-        data={orders}
+        data={notifications}
         keyExtractor={(item) => item.id}
-        renderItem={renderOrderCard}
+        renderItem={renderNotificationCard}
         contentContainerStyle={styles.list}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={fetchDeliveredOrders} />}
+        refreshControl={
+          <RefreshControl refreshing={loading} onRefresh={fetchNotifications} colors={[Colors.primary]} />
+        }
+        showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Bell size={48} color={Colors.textMuted} />
-            <Text style={styles.emptyTitle}>No delivered orders</Text>
-            <Text style={styles.emptyText}>Delivered orders will appear here for reminder management</Text>
+            <View style={styles.emptyIconContainer}>
+              <Bell size={56} color={Colors.textMuted} />
+            </View>
+            <Text style={styles.emptyTitle}>No notifications yet</Text>
+            <Text style={styles.emptyText}>New orders, user registrations, and alerts will appear here</Text>
           </View>
         }
       />
-
-      <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <View>
-              <Text style={styles.modalTitle}>Order Details</Text>
-              <Text style={styles.modalSubtitle}>#{selectedOrder?.orderId.substring(0, 12)}</Text>
-            </View>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <X size={24} color={Colors.charcoal} />
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView contentContainerStyle={styles.modalContent}>
-            <View style={styles.infoCard}>
-              <Text style={styles.infoCardTitle}>Customer Information</Text>
-              <View style={styles.infoRow}>
-                <Text style={styles.infoLabel}>Name</Text>
-                <Text style={styles.infoValue}>{selectedOrder?.userName}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <View style={styles.infoRowIcon}>
-                  <Mail size={14} color={Colors.textMuted} />
-                </View>
-                <Text style={styles.infoValue}>{selectedOrder?.userEmail}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <View style={styles.infoRowIcon}>
-                  <Phone size={14} color={Colors.textMuted} />
-                </View>
-                <Text style={styles.infoValue}>{selectedOrder?.userPhone}</Text>
-              </View>
-              <View style={styles.divider} />
-              <View style={styles.infoRow}>
-                <View style={styles.infoRowIcon}>
-                  <MapPin size={14} color={Colors.textMuted} />
-                </View>
-                <Text style={[styles.infoValue, styles.addressText]} numberOfLines={2}>
-                  {selectedOrder?.deliveryAddress}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.infoCard}>
-              <Text style={styles.infoCardTitle}>Order Items</Text>
-              {selectedOrder?.items.map((item: any, idx: number) => (
-                <View key={idx} style={styles.itemRow}>
-                  <View style={styles.itemIcon}>
-                    <ShoppingCart size={14} color={Colors.primary} />
-                  </View>
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemQty}>x{item.quantity || 1}</Text>
-                  <Text style={styles.itemPrice}>₹{((item.price || 0) * (item.quantity || 1)).toFixed(2)}</Text>
-                </View>
-              ))}
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Total Amount</Text>
-                <Text style={styles.totalValue}>₹{selectedOrder?.totalAmount.toFixed(2)}</Text>
-              </View>
-            </View>
-
-            <View style={styles.messageSection}>
-              <Text style={styles.messageSectionTitle}>Notification Message</Text>
-              <Text style={styles.messageHint}>This message will be sent to the user with a reorder button</Text>
-              <TextInput
-                style={styles.messageInput}
-                multiline
-                placeholder="Enter reminder message"
-                placeholderTextColor={Colors.textMuted}
-                value={messageText}
-                onChangeText={setMessageText}
-                editable={!sendingNotification}
-              />
-            </View>
-
-            <TouchableOpacity
-              style={[styles.sendButton, sendingNotification && styles.sendButtonDisabled]}
-              onPress={handleSendReminder}
-              disabled={sendingNotification}
-            >
-              {sendingNotification ? (
-                <ActivityIndicator size="small" color={Colors.white} />
-              ) : (
-                <>
-                  <Send size={18} color={Colors.white} />
-                  <Text style={styles.sendButtonText}>Send Notification</Text>
-                </>
-              )}
-            </TouchableOpacity>
-          </ScrollView>
-        </SafeAreaView>
-      </Modal>
     </SafeAreaView>
   )
 }
@@ -328,19 +286,87 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   header: {
-    padding: 20,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: Colors.white,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  title: {
-    fontSize: 24,
+  headerLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  headerIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.logoback,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerTitle: {
+    fontSize: 20,
     fontWeight: "bold",
     color: Colors.charcoal,
-    marginBottom: 4,
   },
-  subtitle: {
-    fontSize: 14,
+  headerSubtitle: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  markAllButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: Colors.logoback,
+    borderRadius: 20,
+  },
+  markAllText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: Colors.primary,
+  },
+  statsContainer: {
+    flexDirection: "row",
+    backgroundColor: Colors.white,
+    marginHorizontal: 16,
+    marginTop: 16,
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  statItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 6,
+  },
+  statIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: Colors.charcoal,
+  },
+  statLabel: {
+    fontSize: 11,
     color: Colors.textMuted,
   },
   list: {
@@ -353,260 +379,106 @@ const styles = StyleSheet.create({
     padding: 16,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 4,
+    marginBottom: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  unreadCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary,
+    backgroundColor: "#FAFFFE",
   },
   cardHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
+    gap: 12,
     marginBottom: 12,
   },
-  orderInfo: {
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  headerContent: {
     flex: 1,
   },
-  orderId: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary,
-    marginBottom: 4,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: Colors.charcoal,
-  },
-  reminderBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  reminderText: {
-    fontSize: 12,
-    fontWeight: "bold",
-  },
-  orderDetails: {
-    flexDirection: "row",
-    gap: 16,
-    marginBottom: 12,
-  },
-  detailRow: {
+  titleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-  },
-  detailText: {
-    fontSize: 13,
-    color: Colors.textMuted,
-  },
-  amountRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginBottom: 12,
-  },
-  amountLabel: {
-    fontSize: 14,
-    color: Colors.textMuted,
-  },
-  amountValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.primary,
-  },
-  openButton: {
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    borderRadius: 10,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
     gap: 8,
   },
-  openButtonText: {
-    color: Colors.white,
+  notifTitle: {
+    fontSize: 16,
     fontWeight: "600",
+    color: Colors.charcoal,
+    flex: 1,
+  },
+  unreadTitle: {
+    fontWeight: "700",
+  },
+  unreadDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.primary,
+  },
+  timestamp: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 4,
+  },
+  deleteIconButton: {
+    padding: 4,
+  },
+  messageContainer: {
+    marginBottom: 12,
+    paddingLeft: 60,
+  },
+  message: {
     fontSize: 14,
+    color: Colors.text,
+    lineHeight: 22,
+  },
+  typeTag: {
+    paddingLeft: 60,
+  },
+  typeTagText: {
+    fontSize: 10,
+    fontWeight: "700",
+    letterSpacing: 0.5,
   },
   emptyContainer: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: Colors.charcoal,
-    marginTop: 16,
-  },
-  emptyText: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    marginTop: 8,
-    textAlign: "center",
+    paddingVertical: 80,
     paddingHorizontal: 40,
   },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "#F3F4F6",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    backgroundColor: Colors.white,
+    justifyContent: "center",
+    marginBottom: 24,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: Colors.charcoal,
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  modalContent: {
-    padding: 20,
-    gap: 16,
-  },
-  infoCard: {
-    backgroundColor: Colors.white,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  infoCardTitle: {
-    fontSize: 16,
+  emptyTitle: {
+    fontSize: 22,
     fontWeight: "bold",
     color: Colors.charcoal,
     marginBottom: 12,
+    textAlign: "center",
   },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-  },
-  infoRowIcon: {
-    width: 24,
-  },
-  infoLabel: {
-    fontSize: 14,
+  emptyText: {
+    fontSize: 15,
     color: Colors.textMuted,
-    width: 60,
-  },
-  infoValue: {
-    fontSize: 14,
-    color: Colors.charcoal,
-    fontWeight: "500",
-    flex: 1,
-  },
-  addressText: {
-    lineHeight: 20,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  itemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 8,
-    gap: 8,
-  },
-  itemIcon: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
-    backgroundColor: Colors.logoback,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  itemName: {
-    fontSize: 14,
-    color: Colors.charcoal,
-    flex: 1,
-  },
-  itemQty: {
-    fontSize: 13,
-    color: Colors.textMuted,
-    minWidth: 30,
-  },
-  itemPrice: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary,
-    minWidth: 70,
-    textAlign: "right",
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 12,
-    marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  totalLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.charcoal,
-  },
-  totalValue: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: Colors.primary,
-  },
-  messageSection: {
-    gap: 8,
-  },
-  messageSectionTitle: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: Colors.charcoal,
-  },
-  messageHint: {
-    fontSize: 12,
-    color: Colors.textMuted,
-  },
-  messageInput: {
-    backgroundColor: Colors.white,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 14,
-    color: Colors.text,
-    minHeight: 120,
-    textAlignVertical: "top",
-  },
-  sendButton: {
-    flexDirection: "row",
-    backgroundColor: Colors.primary,
-    paddingVertical: 16,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    marginBottom: 20,
-  },
-  sendButtonDisabled: {
-    opacity: 0.6,
-  },
-  sendButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: "bold",
+    textAlign: "center",
+    lineHeight: 22,
   },
 })

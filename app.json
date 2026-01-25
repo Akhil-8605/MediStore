@@ -4,23 +4,36 @@
     "slug": "MediStore",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/favicon.png",
+    "icon": "./assets/images/faviconWhite.png",
     "scheme": "medistore",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.akhil8605.MediStore",
+      "infoPlist": {
+        "UIBackgroundModes": [
+          "fetch",
+          "remote-notification"
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/favicon.png",
+        "foregroundImage": "./assets/images/faviconWhite.png",
         "backgroundImage": "./assets/images/favicon.png",
         "monochromeImage": "./assets/images/favicon.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.akhil8605.MediStore"
+      "package": "com.akhil8605.MediStore",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "VIBRATE",
+        "WAKE_LOCK"
+      ]
     },
     "web": {
       "output": "static",
@@ -40,7 +53,16 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/favicon.png",
+          "color": "#009521",
+          "defaultChannel": "default",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
@@ -51,6 +73,7 @@
       "eas": {
         "projectId": "5c43225a-a38c-4e75-9b46-ecd83aed0808"
       }
-    }
+    },
+    "owner": "akhil-8605"
   }
 }
